@@ -1,0 +1,15 @@
+name: Upload v0.1.0 release assets
+on:
+  push:
+    branches: [release-upload-v0.1.0]
+permissions:
+  contents: write
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Upload prepared release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload v0.1.0 release-assets/Church-TV-Control.zip release-assets/SHA256.txt --repo "$GITHUB_REPOSITORY" --clobber
