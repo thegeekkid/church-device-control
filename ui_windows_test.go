@@ -42,7 +42,7 @@ func TestNativeTableAndIcon(t *testing.T) {
 	if list == 0 {
 		t.Fatal("ListView creation failed")
 	}
-	state.TVs = []TV{{Name: "Lobby", IP: "192.168.1.5", Power: "PowerOn", Status: "Reachable"}, {Name: "Sanctuary", IP: "192.168.1.6", Power: "DisplayOff", Status: "Reachable"}, {Name: "Classroom", IP: "192.168.1.7", Status: "Unreachable"}}
+	state.TVs = []TV{{Name: "Lobby", IP: "192.168.1.5", Power: "PowerOn", Status: "Reachable"}, {Name: "Sanctuary", IP: "192.168.1.6", Power: "Ready", Status: "Reachable"}, {Name: "Classroom", IP: "192.168.1.7", Status: "Unreachable"}}
 	state.Dirty = true
 	update()
 	if count := callmsg(list, 0x1004, 0, 0); count != 3 {

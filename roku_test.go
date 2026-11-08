@@ -119,6 +119,8 @@ func TestPowerIndicatorDoesNotGuessOfflineState(t *testing.T) {
 		{TV{Power: "PowerOn", Status: "Reachable"}, 0, "On"},
 		{TV{Power: "DisplayOff", Status: "Reachable"}, 1, "Off"},
 		{TV{Power: "ReadySuspend", Status: "Reachable"}, 1, "Off"},
+		{TV{Power: "Ready", Status: "Reachable"}, 1, "Off"},
+		{TV{Power: "Ready", Status: "Unreachable (asleep or offline)"}, 2, "Unknown"},
 		{TV{Power: "PowerOn", Status: "Unreachable (asleep or offline)"}, 2, "Unknown"},
 		{TV{Power: "PowerOn", Status: "PowerOff accepted; refresh to verify"}, 2, "Pending"},
 		{TV{Power: "PowerOff", Status: "Failed: HTTP 403"}, 2, "Error"},
@@ -142,7 +144,7 @@ func TestPowerCommandRefreshesAfterDelay(t *testing.T) {
 			return
 		}
 		queried = time.Now()
-		io.WriteString(w, `<device-info><is-tv>true</is-tv><friendly-device-name>Factory name</friendly-device-name><power-mode>DisplayOff</power-mode></device-info>`)
+		io.WriteString(w, `<device-info><is-tv>true</is-tv><friendly-device-name>Factory name</friendly-device-name><power-mode>Ready</power-mode></device-info>`)
 	}))
 	defer s.Close()
 	old := client
@@ -157,8 +159,11 @@ func TestPowerCommandRefreshesAfterDelay(t *testing.T) {
 		t.Fatal(paths)
 	}
 	tvs := snapshot()
-	if tvs[0].Power != "DisplayOff" || tvs[0].Name != "Lobby" || tvs[0].Status != "Reachable" {
+	if tvs[0].Power != "Ready" || tvs[0].Name != "Lobby" || tvs[0].Status != "Reachable" {
 		t.Fatal(tvs[0])
+	}
+	if image, text := tvIndicator(tvs[0]); image != 1 || text != "Off" {
+		t.Fatalf("Ready after power-off must show red Off; got %d %s", image, text)
 	}
 	if tvs[1].Power != "PowerOn" {
 		t.Fatal("uncommanded TV changed")

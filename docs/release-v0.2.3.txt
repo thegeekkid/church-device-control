@@ -1,0 +1,7 @@
+Roku TV Control v0.2.3
+
+Fix the power-status indicator for Roku TVs that report Ready while in standby. A reachable TV reporting Ready now shows the red Off indicator instead of yellow Unknown. The Reported power column retains the original Ready value. Unreachable TVs still show Unknown.
+
+Signed with Azure Artifact Signing. Extract Church-TV-Control.zip and replace the previous executable. Saved TVs and room names are preserved.
+
+Regression tests cover the Ready mapping, an accepted PowerOff followed by a Ready response, and the native Windows table.

@@ -84,3 +84,6 @@ Saved TVs refresh automatically when the window opens. After an individual or
 group power command finishes sending, the app waits one second and checks the
 commanded TVs. Network queries run in the background; sleeping or offline TVs
 may take longer to time out. Use Refresh status if a TV is still transitioning.
+
+VERSION 0.2.3
+Reachable TVs reporting Ready are recognized as off/standby and show red Off.

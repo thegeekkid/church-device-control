@@ -301,7 +301,7 @@ func tvIndicator(t TV) (int, string) {
 	switch strings.ToLower(t.Power) {
 	case "poweron":
 		return 0, "On"
-	case "poweroff", "displayoff", "readysuspend", "suspend", "standby":
+	case "poweroff", "displayoff", "ready", "readysuspend", "suspend", "standby":
 		return 1, "Off"
 	default:
 		return 2, "Unknown"
