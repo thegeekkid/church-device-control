@@ -1,0 +1,9 @@
+Roku TV Control v0.2.2
+
+- Automatically refresh saved TV status when the application opens.
+- Automatically check the commanded TVs one second after individual or group power commands finish sending.
+- Keep verification in the background with pending indicators while waiting. Command results remain in the summary message.
+
+Signed with Azure Artifact Signing. Extract Church-TV-Control.zip and replace the previous executable. Saved TVs and room names are preserved. No additional runtime installation required.
+
+Validated with delayed-query and startup refresh tests against a simulated Roku, protocol and persistence tests, Linux race detection, and Windows-native table, selection, indicator and icon tests. Physical TVs are not accessible to the build environment.

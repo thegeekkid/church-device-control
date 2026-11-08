@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type rewriteTransport struct {
@@ -128,5 +129,82 @@ func TestPowerIndicatorDoesNotGuessOfflineState(t *testing.T) {
 		if image != c.image || text != c.text {
 			t.Errorf("%+v: got %d %s, want %d %s", c.tv, image, text, c.image, c.text)
 		}
+	}
+}
+
+func TestPowerCommandRefreshesAfterDelay(t *testing.T) {
+	var sent, queried time.Time
+	var paths []string
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		if r.Method == "POST" {
+			sent = time.Now()
+			return
+		}
+		queried = time.Now()
+		io.WriteString(w, `<device-info><is-tv>true</is-tv><friendly-device-name>Factory name</friendly-device-name><power-mode>DisplayOff</power-mode></device-info>`)
+	}))
+	defer s.Close()
+	old := client
+	client = &http.Client{Transport: rewriteTransport{s.URL, http.DefaultTransport}}
+	defer func() { client = old }()
+	state.TVs = []TV{{IP: "192.168.1.5", Name: "Lobby", Power: "PowerOn", Status: "Reachable"}, {IP: "192.168.1.6", Name: "Other room", Power: "PowerOn", Status: "Reachable"}}
+	result := sendPowerAndRefresh(snapshot()[:1], "PowerOff")
+	if queried.Sub(sent) < time.Second {
+		t.Fatalf("status was queried too soon: %v", queried.Sub(sent))
+	}
+	if strings.Join(paths, ";") != "POST /keypress/PowerOff;GET /query/device-info" {
+		t.Fatal(paths)
+	}
+	tvs := snapshot()
+	if tvs[0].Power != "DisplayOff" || tvs[0].Name != "Lobby" || tvs[0].Status != "Reachable" {
+		t.Fatal(tvs[0])
+	}
+	if tvs[1].Power != "PowerOn" {
+		t.Fatal("uncommanded TV changed")
+	}
+	if !strings.Contains(result, "1 of 1 accepted") || !strings.Contains(result, "Status refreshed") {
+		t.Fatal(result)
+	}
+}
+func TestStartupRefreshUsesSavedTVs(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/query/device-info" {
+			t.Errorf("unexpected startup request: %s %s", r.Method, r.URL.Path)
+		}
+		io.WriteString(w, `<device-info><is-tv>true</is-tv><friendly-device-name>Factory name</friendly-device-name><power-mode>PowerOn</power-mode></device-info>`)
+	}))
+	defer s.Close()
+	old := client
+	client = &http.Client{Transport: rewriteTransport{s.URL, http.DefaultTransport}}
+	defer func() { client = old }()
+	state.Lock()
+	state.TVs = []TV{{IP: "192.168.1.5", Name: "Lobby"}}
+	state.Busy = false
+	e := saveLocked()
+	state.Unlock()
+	if e != nil {
+		t.Fatal(e)
+	}
+	load()
+	refreshOnLaunch()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		state.Lock()
+		busy := state.Busy
+		state.Unlock()
+		if !busy {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("startup refresh did not finish")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	tvs := snapshot()
+	if len(tvs) != 1 || tvs[0].Name != "Lobby" || tvs[0].Power != "PowerOn" || tvs[0].Status != "Reachable" {
+		t.Fatal(tvs)
 	}
 }

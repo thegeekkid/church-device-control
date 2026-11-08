@@ -12,7 +12,7 @@ QUICK START (Windows 10/11, 64-bit Intel/AMD)
    This increases standby energy use. Keep TVs plugged into AC power.
 5. Click Discover TVs. Select a TV, enter its room name, and click Save name.
 6. Use Selected ON/OFF or All TVs ON/OFF. Group commands ask for confirmation.
-   Click Refresh status after a few seconds to read reported power state.
+   The app checks reported power state about one second after commands.
 
 IF A TV IS MISSING
 - Turn it on with its remote for initial setup and discovery.
@@ -66,8 +66,9 @@ The first column shows a colored dot plus a text label:
   Green / On: Roku reported PowerOn.
   Red / Off: Roku reported an off, display-off, or standby state.
   Yellow: unknown, unreachable, a failed command, or a command awaiting refresh.
-Click Refresh status after a power command to confirm the TV state.
-Saved TVs initially show Unknown until refreshed or rediscovered.
+The app automatically checks the commanded TVs about one second after commands.
+You can also click Refresh status whenever you want.
+Saved TVs are automatically refreshed on launch. Unreachable TVs stay Unknown.
 Existing TV settings and room names are preserved when replacing the EXE.
 
 The original TV icon and Windows resource object are included in the source.
@@ -77,3 +78,9 @@ To regenerate resources (developer only):
   go-winres make --arch amd64
 The checked-in rsrc_windows_amd64.syso embeds the icon and manifest at build time.
 See docs/SIGNING.txt for optional cloud signing with Azure Artifact Signing.
+
+VERSION 0.2.2
+Saved TVs refresh automatically when the window opens. After an individual or
+group power command finishes sending, the app waits one second and checks the
+commanded TVs. Network queries run in the background; sleeping or offline TVs
+may take longer to time out. Use Refresh status if a TV is still transitioning.

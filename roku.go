@@ -226,8 +226,13 @@ func runJob(f func() string) {
 	}()
 }
 func snapshot() []TV { state.Lock(); defer state.Unlock(); return append([]TV(nil), state.TVs...) }
-func refresh() string {
-	tvs := snapshot()
+func refreshOnLaunch() {
+	if len(snapshot()) > 0 {
+		runJob(refresh)
+	}
+}
+func refresh() string { return refreshTVs(snapshot()) }
+func refreshTVs(tvs []TV) string {
 	for _, t := range tvs {
 		fresh, e := inspect(t.IP)
 		if e != nil {
@@ -255,7 +260,7 @@ func sendPower(tvs []TV, cmd string) string {
 				if e != nil {
 					state.TVs[i].Status = "Failed: " + e.Error()
 				} else {
-					state.TVs[i].Status = cmd + " accepted; refresh to verify"
+					state.TVs[i].Status = cmd + " accepted; awaiting status check"
 					ok++
 				}
 			}
@@ -263,6 +268,23 @@ func sendPower(tvs []TV, cmd string) string {
 		state.Unlock()
 	}
 	return fmt.Sprintf("%s: %d of %d accepted. Acceptance does not confirm the screen changed.", cmd, ok, len(tvs))
+}
+
+// Keep the delay and network queries in the existing background job so the
+// window continues repainting and another command cannot race verification.
+func sendPowerAndRefresh(tvs []TV, cmd string) string {
+	result := sendPower(tvs, cmd)
+	state.Lock()
+	state.Message = "Command sent. Checking TV status in one second…"
+	state.Dirty = true
+	state.Unlock()
+	time.Sleep(time.Second)
+	state.Lock()
+	state.Message = "Checking TV status…"
+	state.Dirty = true
+	state.Unlock()
+	refreshTVs(tvs)
+	return strings.TrimSuffix(result, " Acceptance does not confirm the screen changed.") + " Status refreshed."
 }
 
 // The dot represents verified power state, not simply network reachability.

@@ -236,7 +236,7 @@ func action(id int) {
 				return
 			}
 		}
-		runJob(func() string { return sendPower(targets, cmd) })
+		runJob(func() string { return sendPowerAndRefresh(targets, cmd) })
 	case 9:
 		if idx < 0 || idx >= len(tvs) {
 			return
@@ -353,6 +353,7 @@ func main() {
 	update()
 	user.NewProc("ShowWindow").Call(win, 1)
 	user.NewProc("UpdateWindow").Call(win)
+	refreshOnLaunch()
 	var msg message
 	for {
 		r, _, _ := user.NewProc("GetMessageW").Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
