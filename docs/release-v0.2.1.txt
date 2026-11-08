@@ -1,0 +1,7 @@
+Roku TV Control v0.2.1
+
+Signed Windows release using Azure Artifact Signing. Includes the native status table, colored power indicators and application icon introduced in v0.2.0.
+
+The build verifies the Authenticode signature before generating the ZIP and checksums. Existing saved TVs and room names are preserved. Extract Church-TV-Control.zip and replace the previous executable. No additional runtime installation required.
+
+Validated with Roku protocol and persistence tests and Windows-native tests covering the table, selection, status images, notifications and embedded icon. Physical TVs are not accessible to the build environment.

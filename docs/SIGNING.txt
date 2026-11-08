@@ -9,7 +9,8 @@ ONE-TIME AZURE CONFIGURATION
 Use an Entra app registration/service principal for this repository. Add a
 federated credential for GitHub Actions:
   Issuer: https://token.actions.githubusercontent.com
-  Subject: repo:thegeekkid/roku-tv-control:ref:refs/heads/main
+  Subject (GitHub immutable subject format):
+    repo:thegeekkid@8616594/roku-tv-control@1449827212:ref:refs/heads/main
   Audience: api://AzureADTokenExchange
 Grant this identity the "Artifact Signing Certificate Profile Signer" role
 (previously "Trusted Signing Certificate Profile Signer") scoped to the
