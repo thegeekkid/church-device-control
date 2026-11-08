@@ -1,10 +1,14 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"runtime"
+	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -21,6 +25,9 @@ var enable = user.NewProc("EnableWindow")
 var win, list, ipbox, namebox, status uintptr
 var buttons []uintptr
 var font uintptr
+var roomBox, userBox, passwordBox, syncBox uintptr
+var displayedTVs []TV
+var settingsWindow uintptr
 
 func w(s string) *uint16 { p, _ := syscall.UTF16PtrFromString(s); return p }
 func callmsg(h uintptr, m uintptr, a uintptr, b uintptr) uintptr {
@@ -77,12 +84,12 @@ func setCell(row, col int, value string) {
 }
 func initTable() {
 	// Report view, one selected row, persistent selection, border and tab focus.
-	list = control("SysListView32", "", 0x0081000D, 20, 166, 1020, 228, 20)
+	list = control("SysListView32", "", 0x0081000D, 20, 166, 1020, 270, 20)
 	callmsg(list, 0x1036, 0, 0x00010021) // full-row selection, grid lines, double buffering
 	columns := []struct {
 		name  string
 		width int
-	}{{"Status", 110}, {"Room", 200}, {"IP address", 145}, {"Reported power", 150}, {"Last result", 390}}
+	}{{"Status", 90}, {"Device name", 190}, {"Room", 140}, {"Type", 65}, {"IP address", 140}, {"Reported power", 110}, {"Last result", 270}}
 	for i, c := range columns {
 		col := lvColumn{Mask: 7, Width: int32(c.width), Text: w(c.name)}
 		callmsg(list, 0x1061, uintptr(i), uintptr(unsafe.Pointer(&col)))
@@ -128,9 +135,33 @@ func update() {
 	state.Dirty = false
 	tvs := append([]TV(nil), state.TVs...)
 	message, busy := state.Message, state.Busy
+	if state.SyncStatus != "" {
+		message += "\r\n" + state.SyncStatus
+	}
 	state.Unlock()
+	focused, _, _ := user.NewProc("GetFocus").Call()
+	editing := focused == namebox || focused == roomBox
+	editName, editRoom := "", ""
+	if editing {
+		editName = textOf(namebox)
+		editRoom = textOf(roomBox)
+	}
 	// List-view messages send synchronous notifications; never hold the state lock here.
 	idx := selected()
+	selectedID := ""
+	if idx >= 0 && idx < len(displayedTVs) {
+		selectedID = deviceID(displayedTVs[idx])
+	}
+	if selectedID != "" {
+		idx = -1
+		for i, t := range tvs {
+			if deviceID(t) == selectedID {
+				idx = i
+				break
+			}
+		}
+	}
+	displayedTVs = tvs
 	top := callmsg(list, 0x1027, 0, 0)
 	callmsg(list, 0xB, 0, 0)
 	callmsg(list, 0x1009, 0, 0)
@@ -138,7 +169,7 @@ func update() {
 		image, text := tvIndicator(t)
 		item := lvItem{Mask: 3, Item: int32(row), Text: w(text), Image: int32(image)}
 		callmsg(list, 0x104D, 0, uintptr(unsafe.Pointer(&item)))
-		for col, value := range []string{t.Name, t.IP, t.Power, t.Status} {
+		for col, value := range []string{t.Name, t.Room, deviceKind(t), t.IP, t.Power, t.Status} {
 			setCell(row, col+1, value)
 		}
 	}
@@ -151,6 +182,10 @@ func update() {
 	}
 	callmsg(list, 0xB, 1, 0)
 	user.NewProc("InvalidateRect").Call(list, 0, 1)
+	if editing {
+		label(namebox, editName)
+		label(roomBox, editRoom)
+	}
 	label(status, message)
 	v := uintptr(1)
 	if busy {
@@ -167,7 +202,7 @@ func action(id int) {
 	if busy {
 		return
 	}
-	tvs := snapshot()
+	tvs := append([]TV(nil), displayedTVs...)
 	idx := selected()
 	switch id {
 	case 1:
@@ -184,7 +219,7 @@ func action(id int) {
 					count++
 				}
 			}
-			return fmt.Sprintf("Found %d Roku TVs. If a TV is missing, add its IP address below.", count)
+			return fmt.Sprintf("Found %d Roku TVs. ", count) + discoverKasa()
 		})
 	case 2:
 		runJob(refresh)
@@ -195,6 +230,9 @@ func action(id int) {
 			if e != nil {
 				return "Could not add TV: " + e.Error()
 			}
+			state.Lock()
+			delete(state.Deleted, deviceID(t))
+			state.Unlock()
 			upsert(t)
 			return "TV added. Select it and save a room name below."
 		})
@@ -207,8 +245,14 @@ func action(id int) {
 			return
 		}
 		state.Lock()
-		state.TVs[idx].Name = name
-		state.Message = "Room name saved."
+		for i := range state.TVs {
+			if deviceID(state.TVs[i]) == deviceID(tvs[idx]) {
+				state.TVs[i].Name = name
+				state.TVs[i].Room = strings.TrimSpace(textOf(roomBox))
+				state.TVs[i].Updated = time.Now().UnixNano()
+			}
+		}
+		state.Message = "Device name and room saved."
 		if e := saveLocked(); e != nil {
 			state.Message = e.Error()
 		}
@@ -237,6 +281,58 @@ func action(id int) {
 			}
 		}
 		runJob(func() string { return sendPowerAndRefresh(targets, cmd) })
+	case 10:
+		ip := strings.TrimSpace(textOf(ipbox))
+		runJob(func() string {
+			t, e := inspectKasa(ip)
+			if e != nil {
+				return e.Error()
+			}
+			state.Lock()
+			delete(state.Deleted, deviceID(t))
+			state.Unlock()
+			upsert(t)
+			return "Kasa plug added."
+		})
+	case 11, 12:
+		room := strings.TrimSpace(textOf(roomBox))
+		targets := roomTargets(room)
+		if len(targets) == 0 {
+			label(status, "Enter a room with assigned devices first.")
+			return
+		}
+		cmd := "PowerOn"
+		if id == 12 {
+			cmd = "PowerOff"
+		}
+		r, _, _ := user.NewProc("MessageBoxW").Call(win, uintptr(unsafe.Pointer(w(fmt.Sprintf("Send %s to %d devices in %s?", cmd, len(targets), room)))), uintptr(unsafe.Pointer(w("Confirm room command"))), 0x24)
+		if r == 6 {
+			runJob(func() string { return sendPowerAndRefresh(targets, cmd) })
+		}
+	case 13:
+		k := strings.TrimSpace(textOf(syncBox))
+		if k != "" && len(k) < 24 {
+			label(status, "Sync key must be at least 24 characters, or blank to disable.")
+			return
+		}
+		if e := saveSecrets(textOf(userBox), textOf(passwordBox), k); e != nil {
+			label(status, e.Error())
+			return
+		}
+		if settingsWindow != 0 {
+			user.NewProc("DestroyWindow").Call(settingsWindow)
+		}
+		runJob(func() string { return syncNow() })
+	case 14:
+		b := make([]byte, 16)
+		if _, e := rand.Read(b); e == nil {
+			label(syncBox, hex.EncodeToString(b))
+			label(status, "New sync key generated. Save settings, then copy this key to your other PCs.")
+		}
+	case 15:
+		runJob(periodicWork)
+	case 16:
+		openSettings()
 	case 9:
 		if idx < 0 || idx >= len(tvs) {
 			return
@@ -246,7 +342,16 @@ func action(id int) {
 			return
 		}
 		state.Lock()
-		state.TVs = append(state.TVs[:idx], state.TVs[idx+1:]...)
+		if state.Deleted == nil {
+			state.Deleted = map[string]int64{}
+		}
+		state.Deleted[deviceID(tvs[idx])] = time.Now().UnixNano()
+		for i := range state.TVs {
+			if deviceID(state.TVs[i]) == deviceID(tvs[idx]) {
+				state.TVs = append(state.TVs[:i], state.TVs[i+1:]...)
+				break
+			}
+		}
 		state.Dirty = true
 		state.Message = "TV removed."
 		if e := saveLocked(); e != nil {
@@ -289,9 +394,10 @@ func proc(h uintptr, m uint32, a, b uintptr) uintptr {
 		kernel.NewProc("RtlMoveMemory").Call(uintptr(unsafe.Pointer(&header)), b, unsafe.Sizeof(header))
 		if header.ID == 20 && int32(header.Code) == -101 {
 			idx := selected()
-			t := snapshot()
+			t := displayedTVs
 			if idx >= 0 && idx < len(t) {
 				label(namebox, t[idx].Name)
+				label(roomBox, t[idx].Room)
 			}
 			return 0
 		}
@@ -300,9 +406,16 @@ func proc(h uintptr, m uint32, a, b uintptr) uintptr {
 		action(int(a & 0xffff))
 		return 0
 	case 0x113:
+		if a == 2 {
+			runJob(periodicWork)
+		}
 		update()
 		return 0
 	case 2:
+		if h != win {
+			settingsWindow = 0
+			return 0
+		}
 		user.NewProc("PostQuitMessage").Call(0)
 		return 0
 	}
@@ -311,7 +424,15 @@ func proc(h uintptr, m uint32, a, b uintptr) uintptr {
 }
 func main() {
 	runtime.LockOSThread()
+	mutex, _, mutexErr := kernel.NewProc("CreateMutexW").Call(0, 0, uintptr(unsafe.Pointer(w("Local\\ChurchDeviceControl"))))
+	if mutexErr == syscall.Errno(183) {
+		return
+	}
+	if mutex != 0 {
+		defer kernel.NewProc("CloseHandle").Call(mutex)
+	}
 	load()
+	loadSecrets()
 	user.NewProc("SetProcessDPIAware").Call()
 	init := struct{ Size, Classes uint32 }{8, 1}
 	common.NewProc("InitCommonControlsEx").Call(uintptr(unsafe.Pointer(&init)))
@@ -324,35 +445,46 @@ func main() {
 	wc := wndclass{Proc: syscall.NewCallback(proc), Instance: instance, Cursor: cursor, Background: 16, Class: class, Icon: icon, SmallIcon: smallIcon}
 	wc.Size = uint32(unsafe.Sizeof(wc))
 	user.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&wc)))
-	win, _, _ = create.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(w("Church TV Control — Roku"))), 0x00CA0000, 100, 100, 1080, 660, 0, 0, instance, 0)
+	win, _, _ = create.Call(0, uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(w("Church Device Control"))), 0x00CA0000, 100, 100, 1080, 770, 0, 0, instance, 0)
 	if win == 0 {
 		return
 	}
-	control("STATIC", "Church TV Control", 0, 20, 16, 650, 30, 0)
-	control("STATIC", "Same network as the TVs • Fast TV Start is required for reliable network power-on", 0, 20, 51, 1020, 25, 0)
+	control("STATIC", "Church Device Control", 0, 20, 16, 650, 30, 0)
+	control("STATIC", "Roku TVs + Kasa plugs • Status and LAN settings refresh every minute", 0, 20, 51, 1020, 25, 0)
 	button := func(title string, x, y, width, id int) {
 		buttons = append(buttons, control("BUTTON", title, 0x10000, x, y, width, 34, id))
 	}
-	button("Discover TVs", 20, 88, 160, 1)
+	button("Discover devices", 20, 88, 160, 1)
 	button("Refresh status", 192, 88, 160, 2)
 	control("STATIC", "Status: green = on  •  red = off  •  yellow = unknown / pending / unreachable", 0, 20, 138, 1010, 24, 0)
 	initTable()
-	button("Selected ON", 20, 410, 160, 5)
-	button("Selected OFF", 192, 410, 160, 6)
-	button("All TVs ON…", 680, 410, 170, 7)
-	button("All TVs OFF…", 862, 410, 178, 8)
-	control("STATIC", "TV IP address", 0, 20, 464, 120, 24, 0)
-	ipbox = control("EDIT", "", 0x00810080, 145, 460, 190, 30, 21)
-	button("Add by IP", 347, 458, 140, 3)
-	control("STATIC", "Room name", 0, 20, 506, 120, 24, 0)
-	namebox = control("EDIT", "", 0x00810080, 145, 502, 350, 30, 22)
-	button("Save name", 507, 500, 140, 4)
-	button("Remove selected", 862, 500, 178, 9)
-	status = control("STATIC", "", 0, 20, 550, 1020, 65, 0)
+	button("Selected ON", 20, 452, 160, 5)
+	button("Selected OFF", 192, 452, 160, 6)
+	button("All devices ON…", 680, 452, 170, 7)
+	button("All devices OFF…", 862, 452, 178, 8)
+	control("STATIC", "Device IP", 0, 20, 504, 120, 24, 0)
+	ipbox = control("EDIT", "", 0x00810080, 145, 500, 190, 30, 21)
+	button("Add Roku", 347, 498, 140, 3)
+	control("STATIC", "Device name", 0, 20, 546, 120, 24, 0)
+	namebox = control("EDIT", "", 0x00810080, 145, 542, 350, 30, 22)
+	button("Save device", 507, 540, 140, 4)
+	button("Remove selected", 862, 540, 178, 9)
+	button("Add Kasa", 500, 498, 140, 10)
+	control("STATIC", "Room", 0, 20, 588, 120, 24, 0)
+	roomBox = control("EDIT", "", 0x00810080, 145, 584, 350, 30, 23)
+	button("Room ON…", 507, 582, 140, 11)
+	button("Room OFF…", 660, 582, 140, 12)
+	control("STATIC", "Assign a room above, then Save device. Enter a room name above to control that room.", 0, 20, 626, 1020, 24, 0)
+	button("Settings…", 365, 88, 150, 16)
+	button("Sync + refresh", 530, 88, 170, 15)
+	status = control("STATIC", "", 0, 20, 664, 1020, 65, 0)
 	user.NewProc("SetTimer").Call(win, 1, 250, 0)
 	update()
 	user.NewProc("ShowWindow").Call(win, 1)
 	user.NewProc("UpdateWindow").Call(win)
+	startLAN()
+	syncStatus(syncNow())
+	user.NewProc("SetTimer").Call(win, 2, 60000, 0)
 	refreshOnLaunch()
 	var msg message
 	for {
@@ -363,4 +495,41 @@ func main() {
 		user.NewProc("TranslateMessage").Call(uintptr(unsafe.Pointer(&msg)))
 		user.NewProc("DispatchMessageW").Call(uintptr(unsafe.Pointer(&msg)))
 	}
+}
+
+func deviceKind(t TV) string {
+	if t.Kind == "kasa" {
+		return "Kasa"
+	}
+	return "Roku"
+}
+
+func openSettings() {
+	if settingsWindow != 0 {
+		user.NewProc("SetForegroundWindow").Call(settingsWindow)
+		return
+	}
+	instance, _, _ := kernel.NewProc("GetModuleHandleW").Call(0)
+	settingsWindow, _, _ = create.Call(0, uintptr(unsafe.Pointer(w("ChurchRokuController"))), uintptr(unsafe.Pointer(w("Local Kasa credentials and LAN sync"))), 0x00CA0000, 150, 150, 820, 370, win, 0, instance, 0)
+	add := func(class, title string, style uintptr, x, y, width, height, id int) uintptr {
+		h, _, _ := create.Call(0, uintptr(unsafe.Pointer(w(class))), uintptr(unsafe.Pointer(w(title))), 0x50000000|style, uintptr(x), uintptr(y), uintptr(width), uintptr(height), settingsWindow, uintptr(id), instance, 0)
+		callmsg(h, 0x30, font, 1)
+		return h
+	}
+	add("STATIC", "Kasa email", 0, 20, 24, 130, 25, 0)
+	userBox = add("EDIT", "", 0x00810080, 160, 20, 600, 30, 24)
+	add("STATIC", "Kasa password", 0, 20, 68, 130, 25, 0)
+	passwordBox = add("EDIT", "", 0x008100A0, 160, 64, 600, 30, 25)
+	add("STATIC", "LAN sync key", 0, 20, 112, 130, 25, 0)
+	syncBox = add("EDIT", "", 0x00810080, 160, 108, 600, 30, 26)
+	add("STATIC", "Credentials are protected by Windows for this user and never synced.", 0, 20, 160, 750, 25, 0)
+	add("STATIC", "Generate a sync key, save it, then copy the same key to the other PCs.", 0, 20, 192, 750, 25, 0)
+	add("BUTTON", "Generate key", 0x10000, 20, 248, 180, 34, 14)
+	add("BUTTON", "Save local settings", 0x10000, 215, 248, 200, 34, 13)
+	secrets.Lock()
+	label(userBox, secrets.User)
+	label(passwordBox, secrets.Password)
+	label(syncBox, secrets.SyncKey)
+	secrets.Unlock()
+	user.NewProc("ShowWindow").Call(settingsWindow, 1)
 }

@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"os"
 	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 	"unsafe"
@@ -57,7 +58,7 @@ func TestNativeTableAndIcon(t *testing.T) {
 	for _, c := range []struct {
 		row, col int
 		want     string
-	}{{0, 0, "On"}, {0, 1, "Lobby"}, {0, 2, "192.168.1.5"}, {1, 0, "Off"}, {2, 0, "Unknown"}} {
+	}{{0, 0, "On"}, {0, 1, "Lobby"}, {0, 4, "192.168.1.5"}, {1, 0, "Off"}, {2, 0, "Unknown"}} {
 		if got := getCell(c.row, c.col); got != c.want {
 			t.Errorf("cell %d,%d = %q want %q", c.row, c.col, got, c.want)
 		}
@@ -77,8 +78,8 @@ func TestNativeTableAndIcon(t *testing.T) {
 	if selected() != 1 {
 		t.Fatal("selection lost after refresh")
 	}
-	if header := callmsg(list, 0x101F, 0, 0); callmsg(header, 0x1200, 0, 0) != 5 {
-		t.Fatal("table must contain five columns")
+	if header := callmsg(list, 0x101F, 0, 0); callmsg(header, 0x1200, 0, 0) != 7 {
+		t.Fatal("table must contain seven columns")
 	}
 	// Capture the real native table so the release can also receive visual inspection.
 	user.NewProc("ShowWindow").Call(win, 1)
@@ -125,4 +126,28 @@ func TestNativeTableAndIcon(t *testing.T) {
 	gdi.NewProc("DeleteDC").Call(memory)
 	user.NewProc("ReleaseDC").Call(list, dc)
 
+}
+
+func TestWindowsProtectedCredentials(t *testing.T) {
+	t.Setenv("APPDATA", t.TempDir())
+	if e := saveSecrets("example@example.org", "test-password", "0123456789abcdef0123456789abcdef"); e != nil {
+		t.Fatal(e)
+	}
+	b, e := os.ReadFile(secretPath())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if strings.Contains(string(b), "test-password") {
+		t.Fatal("password stored in plaintext")
+	}
+	secrets.Lock()
+	secrets.Password = ""
+	secrets.Unlock()
+	loadSecrets()
+	secrets.Lock()
+	got := secrets.Password
+	secrets.Unlock()
+	if got != "test-password" {
+		t.Fatal("DPAPI roundtrip failed")
+	}
 }

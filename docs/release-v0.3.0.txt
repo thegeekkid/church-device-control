@@ -1,0 +1,13 @@
+Church Device Control v0.3.0
+
+- Roku TVs and single-outlet Kasa smart plugs in the same device list. Supports legacy XOR and authenticated KLAP v1/v2 local control; firmware using other protocols is not yet supported. Configure TP-Link credentials locally on each PC. Physical Kasa models have not been tested here.
+- Device name replaces the old Room label. Assign devices to rooms and send room ON/OFF commands, with confirmation.
+- Direct encrypted settings sync on the LAN, protected by a shared key. Device names, addresses, room assignments and deletions merge across installations; credentials and runtime power states never sync.
+- Settings sync and status refresh every minute while open, plus launch and post-command refresh.
+- Signed portable EXE, ZIP, and installer. Installer supports per-user installation without elevation or all-users installation with elevation, desktop/Start menu shortcuts, and a taskbar pinning helper.
+
+Setup: open Settings, enter Kasa credentials, generate and save a sync key on the first PC, and copy that key into Settings on each other PC. Allow the application through Windows Firewall on the trusted Private network. LAN broadcast sync uses UDP 45439 and requires PCs on a network that permits broadcast traffic; no guest isolation or cross-VLAN discovery. Each PC independently queries device status. See docs/SETUP-v0.3.txt.
+
+Saved device names migrate automatically; room assignments initially remain blank. A backup of the old list is saved as tvs-v0.2-backup.json. Keep the PCs' clocks synchronized. For simultaneous edits to the same device, the newest timestamp wins; different devices merge independently.
+
+Validation: simulated legacy Kasa control, KLAP transport/authentication tests, encrypted sync/tamper/deletion/migration tests, Linux race detection, native Windows table and DPAPI tests, installer install/uninstall checks in both scopes, and executable/installer signature verification. Real Kasa firmware and multiple physical PCs still require a local-network acceptance test.

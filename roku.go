@@ -16,12 +16,15 @@ import (
 )
 
 type TV struct {
-	IP     string
-	Name   string
-	Model  string
-	Serial string
-	Power  string
-	Status string
+	IP      string
+	Name    string
+	Model   string
+	Serial  string
+	Power   string
+	Status  string
+	Kind    string
+	Room    string
+	Updated int64
 }
 type deviceInfo struct {
 	XMLName xml.Name `xml:"device-info"`
@@ -61,7 +64,7 @@ func inspect(ip string) (TV, error) {
 	if name == "" {
 		name = d.Model
 	}
-	return TV{ip, name, d.Model, d.Serial, d.Power, "Reachable"}, nil
+	return TV{IP: ip, Name: name, Model: d.Model, Serial: d.Serial, Power: d.Power, Status: "Reachable"}, nil
 }
 func power(ip, cmd string) error {
 	if !validIP(ip) || (cmd != "PowerOn" && cmd != "PowerOff") {
@@ -144,10 +147,12 @@ func discover() ([]string, error) {
 
 var state struct {
 	sync.Mutex
-	TVs     []TV
-	Message string
-	Dirty   bool
-	Busy    bool
+	TVs        []TV
+	Message    string
+	Dirty      bool
+	Busy       bool
+	Deleted    map[string]int64
+	SyncStatus string
 }
 
 func configPath() string {
@@ -162,7 +167,7 @@ func saveLocked() error {
 	if e := os.MkdirAll(filepath.Dir(p), 0700); e != nil {
 		return e
 	}
-	b, e := json.MarshalIndent(state.TVs, "", "  ")
+	b, e := json.MarshalIndent(configSnapshotLocked(false), "", "  ")
 	if e != nil {
 		return e
 	}
@@ -175,13 +180,27 @@ func saveLocked() error {
 func load() {
 	b, e := os.ReadFile(configPath())
 	if e == nil {
-		json.Unmarshal(b, &state.TVs)
+		var c sharedConfig
+		if len(b) > 0 && b[0] == '[' {
+			backup := filepath.Join(filepath.Dir(configPath()), "tvs-v0.2-backup.json")
+			if f, err := os.OpenFile(backup, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600); err == nil {
+				f.Write(b)
+				f.Close()
+			}
+			json.Unmarshal(b, &state.TVs)
+		} else if json.Unmarshal(b, &c) == nil {
+			state.TVs = c.Devices
+			state.Deleted = c.Deleted
+		}
 	}
 	filtered := []TV{}
 	for _, tv := range state.TVs {
 		if validIP(tv.IP) {
 			tv.Status = "Saved — refresh to check"
 			tv.Power = ""
+			if tv.Updated == 0 {
+				tv.Updated = 1
+			}
 			filtered = append(filtered, tv)
 		}
 	}
@@ -192,13 +211,30 @@ func load() {
 func upsert(t TV) {
 	state.Lock()
 	defer state.Unlock()
+	if state.Deleted[deviceID(t)] > 0 && t.Updated <= state.Deleted[deviceID(t)] {
+		return
+	}
 	for i, old := range state.TVs {
 		if old.IP == t.IP || (old.Serial != "" && old.Serial == t.Serial) {
 			t.Name = old.Name
+			if t.Serial == "" {
+				t.Serial = old.Serial
+			}
+			t.Room = old.Room
+			t.Updated = old.Updated
+			if t.Kind == "" {
+				t.Kind = old.Kind
+			}
+			if t.IP != old.IP || t.Serial != old.Serial {
+				t.Updated = time.Now().UnixNano()
+			}
 			state.TVs[i] = t
 			state.Dirty = true
 			return
 		}
+	}
+	if t.Updated == 0 {
+		t.Updated = time.Now().UnixNano()
 	}
 	state.TVs = append(state.TVs, t)
 	state.Dirty = true
@@ -234,7 +270,7 @@ func refreshOnLaunch() {
 func refresh() string { return refreshTVs(snapshot()) }
 func refreshTVs(tvs []TV) string {
 	for _, t := range tvs {
-		fresh, e := inspect(t.IP)
+		fresh, e := inspectDevice(t)
 		if e != nil {
 			state.Lock()
 			for i := range state.TVs {
@@ -253,7 +289,7 @@ func refreshTVs(tvs []TV) string {
 func sendPower(tvs []TV, cmd string) string {
 	ok := 0
 	for _, t := range tvs {
-		e := power(t.IP, cmd)
+		e := devicePower(t, cmd)
 		state.Lock()
 		for i := range state.TVs {
 			if state.TVs[i].IP == t.IP {

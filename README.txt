@@ -87,3 +87,13 @@ may take longer to time out. Use Refresh status if a TV is still transitioning.
 
 VERSION 0.2.3
 Reachable TVs reporting Ready are recognized as off/standby and show red Off.
+
+VERSION 0.3.0 — CHURCH DEVICE CONTROL
+See docs/SETUP-v0.3.txt for Kasa compatibility, rooms, encrypted direct LAN sync,
+one-minute updates, installer choices and taskbar pinning instructions.
+Device names and settings are preserved, with an old-format backup on migration.
+Kasa account credentials and sync keys are stored using Windows DPAPI per user.
+The app now includes the statically compiled github.com/pborges/tapo protocol
+library (pinned in go.mod/go.sum); no Go/Python/runtime installation is needed.
+Developers: use Go 1.27.3 or later. The portable EXE and installer are separate
+release downloads in addition to the ZIP.
