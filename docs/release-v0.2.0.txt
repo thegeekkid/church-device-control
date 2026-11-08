@@ -1,0 +1,11 @@
+Roku TV Control v0.2.0
+
+- Native Windows table with aligned, resizable columns and full-row selection.
+- First-column status dots and text: green On, red Off, yellow Unknown/Pending/Error.
+- Saved and unreachable TVs stay yellow until their power state is verified. A command accepted by Roku is shown as pending until Refresh status confirms it.
+- Original TV/power icon embedded in the EXE, title bar and taskbar.
+- Optional Azure Artifact Signing workflow with OIDC authentication; see docs/SIGNING.txt.
+
+Extract Church-TV-Control.zip and replace the old executable. Existing saved TVs and room names are preserved in %APPDATA%\ChurchRoku\tvs.json. No runtime installation required.
+
+Validated with protocol and persistence tests, Linux race detection, Windows static checks, and a Windows-native test of table rows, selection, status images, notifications and embedded icon. Real Roku TVs are not accessible from the build environment.

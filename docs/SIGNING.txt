@@ -1,0 +1,44 @@
+AZURE ARTIFACT SIGNING (formerly Trusted Signing)
+
+Signing can run in GitHub Actions on a Windows-hosted runner. No home computer
+or exported private key is needed. The EXE is signed before packaging, and its
+Authenticode signature is verified before generating the ZIP and checksums.
+The application itself still needs no installed runtime.
+
+ONE-TIME AZURE CONFIGURATION
+Use an Entra app registration/service principal for this repository. Add a
+federated credential for GitHub Actions:
+  Issuer: https://token.actions.githubusercontent.com
+  Subject: repo:thegeekkid/roku-tv-control:ref:refs/heads/main
+  Audience: api://AzureADTokenExchange
+Grant this identity the "Artifact Signing Certificate Profile Signer" role
+(previously "Trusted Signing Certificate Profile Signer") scoped to the
+intended certificate profile. The signing account/profile and identity
+validation must already be provisioned. Use a public-trust profile for general
+Windows distribution; a private-trust profile needs trust configuration on PCs.
+No Azure resources or role assignments are automatically created by this repo.
+
+REPOSITORY VARIABLES
+In GitHub Settings > Secrets and variables > Actions > Variables, add:
+  AZURE_CLIENT_ID             Entra application/client ID
+  AZURE_TENANT_ID             Directory/tenant ID
+  AZURE_SUBSCRIPTION_ID       Azure subscription ID
+  AZURE_SIGNING_ENDPOINT      Regional endpoint (e.g. https://eus.codesigning.azure.net/)
+  AZURE_SIGNING_ACCOUNT       Artifact Signing account name
+  AZURE_CERTIFICATE_PROFILE   Certificate profile name
+These are identifiers, not passwords. No client secret or private key is used.
+
+RUN
+Actions > Build and release > Run workflow. Select main, check sign, and choose
+whether to publish the release. A signing failure stops the run; it does not
+publish an unsigned substitute. Existing releases are never overwritten.
+When publishing another signed package after an unsigned release, use a new
+version tag and update the resource version and release notes first.
+
+Before publishing a signed build, confirm that the intended publisher is the
+one shown by Get-AuthenticodeSignature. Signing does not guarantee immediate
+SmartScreen reputation or the absence of download warnings.
+
+REFERENCES
+https://github.com/Azure/artifact-signing-action
+https://learn.microsoft.com/en-us/azure/artifact-signing/how-to-signing-integrations

@@ -39,18 +39,19 @@ Room names and TV details are stored for the current Windows user in:
 %APPDATA%\ChurchRoku\tvs.json
 The app makes direct local-network requests. It does not upload TV data.
 Only one app instance should be used at a time to avoid saved-list conflicts.
-The executable is unsigned; Windows may show a SmartScreen warning. Follow
+This build is unsigned. Windows may show a SmartScreen warning. Follow
 church IT policy when running downloaded programs.
 
 BUILD AND VALIDATION
 Built from included Go source with no third-party code dependencies.
 Protocol and persistence tests run against a simulated Roku endpoint.
-Windows executable was cross-compiled on Linux. The native Windows UI and
-physical TVs have not been tested here; test one TV before a church-wide use.
+The Windows table, selection, indicator images and embedded application icon
+are tested on a Windows runner. Physical TVs are not accessible to the build
+environment; test a TV before church-wide use.
 
 SOURCE BUILD (for a developer; NOT required to use the app)
 Install Go 1.25 or later. In the source folder:
-  go test -race ./...
+  go test ./...
   go vet ./...
   set GOOS=windows
   set GOARCH=amd64
@@ -58,3 +59,21 @@ Install Go 1.25 or later. In the source folder:
   go build -buildvcs=false -trimpath -ldflags="-s -w -H=windowsgui" -o Church-TV-Control.exe .
 The source can be adapted for a future Raspberry Pi interface; the current
 native Windows UI does not run on the Pi.
+
+VERSION 0.2.0
+The TV list is now a native table. Drag column dividers to resize them.
+The first column shows a colored dot plus a text label:
+  Green / On: Roku reported PowerOn.
+  Red / Off: Roku reported an off, display-off, or standby state.
+  Yellow: unknown, unreachable, a failed command, or a command awaiting refresh.
+Click Refresh status after a power command to confirm the TV state.
+Saved TVs initially show Unknown until refreshed or rediscovered.
+Existing TV settings and room names are preserved when replacing the EXE.
+
+The original TV icon and Windows resource object are included in the source.
+To regenerate resources (developer only):
+  go run ./tools/icon
+  go install github.com/tc-hib/go-winres@v0.3.3
+  go-winres make --arch amd64
+The checked-in rsrc_windows_amd64.syso embeds the icon and manifest at build time.
+See docs/SIGNING.txt for optional cloud signing with Azure Artifact Signing.

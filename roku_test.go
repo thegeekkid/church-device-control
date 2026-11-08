@@ -79,6 +79,7 @@ func TestFailures(t *testing.T) {
 }
 func TestSaveAndOfflineRetention(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
 	state.TVs = nil
 	upsert(TV{IP: "192.168.1.5", Name: "Lobby", Serial: "abc"})
 	upsert(TV{IP: "192.168.1.6", Name: "New default", Serial: "abc"})
@@ -104,6 +105,28 @@ func TestInvalidIP(t *testing.T) {
 	for _, ip := range []string{"localhost", "http://example.com", "239.255.255.250", "0.0.0.0", "255.255.255.255", "::1", "192.168.1.2/path"} {
 		if validIP(ip) {
 			t.Fatal(ip)
+		}
+	}
+}
+
+func TestPowerIndicatorDoesNotGuessOfflineState(t *testing.T) {
+	cases := []struct {
+		tv    TV
+		image int
+		text  string
+	}{
+		{TV{Power: "PowerOn", Status: "Reachable"}, 0, "On"},
+		{TV{Power: "DisplayOff", Status: "Reachable"}, 1, "Off"},
+		{TV{Power: "ReadySuspend", Status: "Reachable"}, 1, "Off"},
+		{TV{Power: "PowerOn", Status: "Unreachable (asleep or offline)"}, 2, "Unknown"},
+		{TV{Power: "PowerOn", Status: "PowerOff accepted; refresh to verify"}, 2, "Pending"},
+		{TV{Power: "PowerOff", Status: "Failed: HTTP 403"}, 2, "Error"},
+		{TV{Power: "Unexpected", Status: "Reachable"}, 2, "Unknown"},
+	}
+	for _, c := range cases {
+		image, text := tvIndicator(c.tv)
+		if image != c.image || text != c.text {
+			t.Errorf("%+v: got %d %s, want %d %s", c.tv, image, text, c.image, c.text)
 		}
 	}
 }

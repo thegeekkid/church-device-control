@@ -264,3 +264,24 @@ func sendPower(tvs []TV, cmd string) string {
 	}
 	return fmt.Sprintf("%s: %d of %d accepted. Acceptance does not confirm the screen changed.", cmd, ok, len(tvs))
 }
+
+// The dot represents verified power state, not simply network reachability.
+func tvIndicator(t TV) (int, string) {
+	if t.Status != "Reachable" {
+		if strings.HasPrefix(t.Status, "Failed:") {
+			return 2, "Error"
+		}
+		if strings.Contains(t.Status, "accepted") {
+			return 2, "Pending"
+		}
+		return 2, "Unknown"
+	}
+	switch strings.ToLower(t.Power) {
+	case "poweron":
+		return 0, "On"
+	case "poweroff", "displayoff", "readysuspend", "suspend", "standby":
+		return 1, "Off"
+	default:
+		return 2, "Unknown"
+	}
+}

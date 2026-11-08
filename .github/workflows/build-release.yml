@@ -1,0 +1,124 @@
+name: Build and release
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Version tag (update resource metadata and release notes for a new version)
+        default: v0.2.0
+        required: true
+        type: string
+      sign:
+        description: Sign with Azure Artifact Signing (requires configured Azure identity and repository variables)
+        default: false
+        type: boolean
+      publish_release:
+        description: Publish the ZIP as a new GitHub release after tests pass
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      GOFLAGS: -buildvcs=false
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      SIGN_BUILD: ${{ inputs.sign }}
+      PUBLISH_RELEASE: ${{ inputs.publish_release }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validate release settings
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Expected a version such as v0.2.0' }
+          if (($env:SIGN_BUILD -eq 'true' -or $env:PUBLISH_RELEASE -eq 'true') -and $env:GITHUB_REF -ne 'refs/heads/main') { throw 'Signing and publishing must run from main' }
+          $version = ($env:RELEASE_TAG.Substring(1) + '.0')
+          $resources = Get-Content winres/winres.json -Raw | ConvertFrom-Json
+          if ($resources.RT_VERSION.'#1'.'0000'.fixed.file_version -ne $version) { throw 'Update resource version before building a new version' }
+          if (-not (Test-Path "docs/release-$env:RELEASE_TAG.txt")) { throw 'Missing release notes' }
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.25.3'
+          cache: false
+      - name: Test actual Windows controls, resources and Roku protocol
+        shell: pwsh
+        run: |
+          go test -v ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go vet ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build portable Windows executable
+        shell: pwsh
+        env:
+          CGO_ENABLED: '0'
+          GOARCH: amd64
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          go build -trimpath -ldflags='-s -w -H=windowsgui' -o build/Church-TV-Control.exe .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate Azure signing configuration
+        if: inputs.sign
+        shell: pwsh
+        env:
+          CLIENT: ${{ vars.AZURE_CLIENT_ID }}
+          TENANT: ${{ vars.AZURE_TENANT_ID }}
+          SUBSCRIPTION: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+        run: |
+          foreach ($key in @('CLIENT','TENANT','SUBSCRIPTION','ENDPOINT','ACCOUNT','PROFILE')) {
+            if (-not [Environment]::GetEnvironmentVariable($key)) { throw "Missing Azure configuration: $key" }
+          }
+      - name: Azure login with GitHub OIDC
+        if: inputs.sign
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign executable
+        if: inputs.sign
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\build
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Verify signature
+        if: inputs.sign
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature build/Church-TV-Control.exe
+          if ($signature.Status -ne 'Valid') { throw "Invalid Authenticode signature: $($signature.Status)" }
+          Write-Host "Verified publisher: $($signature.SignerCertificate.Subject)"
+      - name: Package executable, instructions and source
+        shell: pwsh
+        run: ./scripts/package.ps1 -Signed:($env:SIGN_BUILD -eq 'true')
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Church-TV-Control-${{ inputs.release_tag }}
+          path: |
+            dist/Church-TV-Control.zip
+            dist/SHA256.txt
+            build/table-smoke.png
+          if-no-files-found: error
+      - name: Publish new release
+        if: inputs.publish_release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = "docs/release-$env:RELEASE_TAG.txt"
+          $signatureNote = if ($env:SIGN_BUILD -eq 'true') { 'Signed using Azure Artifact Signing.' } else { 'This build is unsigned; Azure signing is available after configuration.' }
+          (Get-Content $notes -Raw) + "`n`n" + $signatureNote | Set-Content build/release-notes.txt -Encoding utf8
+          gh release create $env:RELEASE_TAG dist/Church-TV-Control.zip dist/SHA256.txt --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "$env:RELEASE_TAG — Windows Roku TV Control" --notes-file build/release-notes.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
