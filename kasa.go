@@ -202,7 +202,7 @@ var setupKasaClient = func(ip, user string) (*tapo.Strip, error) {
 	return tapo.New(ip, tapo.WithCredentials(user, "kasaSetup"), tapo.WithTimeout(3*time.Second), tapo.WithDisableLegacy())
 }
 
-func probeKasa(ctx context.Context, ip string) (*tapo.Strip, tapo.RawResponse, error) {
+func negotiateKasa(ctx context.Context, ip string) (*tapo.Strip, tapo.RawResponse, error) {
 	c, e := connectKasa(ip)
 	if e != nil {
 		return nil, nil, e

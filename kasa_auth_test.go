@@ -27,6 +27,11 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 	var local []byte
 	var mu sync.Mutex
 	var authenticated bool
+	handshakeCount := 0
+	failNextRead := false
+	kasaSessions.Lock()
+	kasaSessions.ByIP = map[string]kasaSession{}
+	kasaSessions.Unlock()
 	relay := 1
 	hash := func(b ...[]byte) []byte {
 		var v []byte
@@ -42,6 +47,7 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 		body, _ := io.ReadAll(r.Body)
 		switch r.URL.Path {
 		case "/app/handshake1":
+			handshakeCount++
 			local = append([]byte(nil), body...)
 			w.Header().Set("Set-Cookie", "TP_SESSIONID=test-session")
 			w.Write(append(append([]byte(nil), remote...), hash(local, remote, auth[:])...))
@@ -52,6 +58,11 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 			}
 			authenticated = true
 		case "/app/request":
+			if failNextRead {
+				failNextRead = false
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
 			if !authenticated {
 				w.WriteHeader(403)
 				return
@@ -116,6 +127,9 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 	if e != nil || tv.Power != "PowerOn" || tv.Model != "HS103" {
 		t.Fatalf("%+v %v", tv, e)
 	}
+	mu.Lock()
+	initialHandshakes := handshakeCount
+	mu.Unlock()
 	for _, c := range []struct{ cmd, power string }{{"PowerOff", "PowerOff"}, {"PowerOn", "PowerOn"}} {
 		if e := devicePower(tv, c.cmd); e != nil {
 			t.Fatal(e)
@@ -124,6 +138,42 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 		if e != nil || got.Power != c.power {
 			t.Fatalf("%s: %+v %v", c.cmd, got, e)
 		}
+	}
+
+	mu.Lock()
+	failNextRead = true
+	mu.Unlock()
+	state.Lock()
+	state.TVs = []TV{tv}
+	state.Unlock()
+	refreshTVs([]TV{tv})
+	if got := snapshot()[0]; got.Status != "Reachable" || got.Power != "PowerOn" {
+		t.Fatalf("transient read failure was not recovered: %+v", got)
+	}
+
+	mu.Lock()
+	finalHandshakes := handshakeCount
+	mu.Unlock()
+	if finalHandshakes != initialHandshakes {
+		t.Fatalf("authentication repeated across status/commands: %d -> %d", initialHandshakes, finalHandshakes)
+	}
+
+	secrets.Lock()
+	oldPassword := secrets.Password
+	secrets.Password = "changed-password"
+	secrets.Unlock()
+	_, e = inspectKasa(tv.IP)
+	secrets.Lock()
+	secrets.Password = oldPassword
+	secrets.Unlock()
+	if e != nil {
+		t.Fatal(e)
+	}
+	mu.Lock()
+	changedHandshakes := handshakeCount
+	mu.Unlock()
+	if changedHandshakes <= finalHandshakes {
+		t.Fatal("credential change reused the old session")
 	}
 
 }

@@ -1,0 +1,11 @@
+Church Device Control v0.3.4
+
+- Reuse authenticated Kasa sessions for commands and status reads instead of repeatedly negotiating normal and setup-mode credentials. Changing credentials invalidates the cached session.
+- Retry one failed Kasa status read after a short pause to tolerate temporary post-command connection failures. No automatic power-command retries are added.
+- Preserve device relay error codes/messages and command failures in the summary after automatic refresh.
+- Select a device and click Details, or double-click its row, to view the full result. Ctrl+C copies the standard Windows dialog.
+- Includes the installer shortcut-helper fix from v0.3.3.
+
+Tests cover authenticated OFF-to-ON control, session reuse, transient status failure recovery, credential invalidation and relay error parsing. Existing Windows tests, both installer scopes and both signatures are checked before publication. The intermittent behavior on the user's physical HS103 still requires verification.
+
+Signed standalone EXE, installer and ZIP. Existing devices, rooms, settings and credentials are preserved.

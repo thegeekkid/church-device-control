@@ -12,6 +12,9 @@ import (
 )
 
 func TestLegacyKasaPowerAndStatus(t *testing.T) {
+	kasaSessions.Lock()
+	kasaSessions.ByIP = map[string]kasaSession{}
+	kasaSessions.Unlock()
 	ln, e := net.Listen("tcp", "127.0.0.1:0")
 	if e != nil {
 		t.Fatal(e)

@@ -333,6 +333,8 @@ func action(id int) {
 		runJob(periodicWork)
 	case 16:
 		openSettings()
+	case 17:
+		showDeviceDetails()
 	case 9:
 		if idx < 0 || idx >= len(tvs) {
 			return
@@ -392,6 +394,10 @@ func proc(h uintptr, m uint32, a, b uintptr) uintptr {
 		var header notifyHeader
 		// lParam is a Win32-owned NMHDR pointer, valid for this notification only.
 		kernel.NewProc("RtlMoveMemory").Call(uintptr(unsafe.Pointer(&header)), b, unsafe.Sizeof(header))
+		if header.ID == 20 && int32(header.Code) == -3 {
+			showDeviceDetails()
+			return 0
+		}
 		if header.ID == 20 && int32(header.Code) == -101 {
 			idx := selected()
 			t := displayedTVs
@@ -477,6 +483,7 @@ func main() {
 	control("STATIC", "Assign a room above, then Save device. Enter a room name above to control that room.", 0, 20, 626, 1020, 24, 0)
 	button("Settings…", 365, 88, 150, 16)
 	button("Sync + refresh", 530, 88, 170, 15)
+	button("Details…", 715, 88, 150, 17)
 	status = control("STATIC", "", 0, 20, 664, 1020, 65, 0)
 	user.NewProc("SetTimer").Call(win, 1, 250, 0)
 	update()
@@ -532,4 +539,18 @@ func openSettings() {
 	label(syncBox, secrets.SyncKey)
 	secrets.Unlock()
 	user.NewProc("ShowWindow").Call(settingsWindow, 1)
+}
+
+func showDeviceDetails() {
+	idx := selected()
+	if idx < 0 || idx >= len(displayedTVs) {
+		label(status, "Select a device first.")
+		return
+	}
+	t := displayedTVs[idx]
+	state.Lock()
+	operation := state.Message
+	state.Unlock()
+	body := fmt.Sprintf("Device: %s\r\nRoom: %s\r\nType: %s\r\nIP: %s\r\nMAC: %s\r\nReported power: %s\r\n\r\nLast result:\r\n%s\r\n\r\nLast operation:\r\n%s\r\n\r\nPress Ctrl+C to copy this dialog.", t.Name, t.Room, deviceKind(t), t.IP, t.MAC, t.Power, t.Status, operation)
+	user.NewProc("MessageBoxW").Call(win, uintptr(unsafe.Pointer(w(body))), uintptr(unsafe.Pointer(w("Device details"))), 0x40)
 }

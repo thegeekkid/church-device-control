@@ -278,6 +278,10 @@ func refresh() string { return refreshTVs(snapshot()) }
 func refreshTVs(tvs []TV) string {
 	for _, t := range tvs {
 		fresh, e := inspectDevice(t)
+		if e != nil && t.Kind == "kasa" {
+			time.Sleep(time.Second)
+			fresh, e = inspectDevice(t)
+		}
 		if e != nil {
 			state.Lock()
 			for i := range state.TVs {

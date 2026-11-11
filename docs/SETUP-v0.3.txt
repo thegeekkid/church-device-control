@@ -78,3 +78,7 @@ authentication mismatch. Keep your normal TP-Link credentials in Settings.
 devices are unreachable. Roku uses the active interface when the device reports
 it; otherwise both available Wi-Fi/Ethernet addresses are shown. Missing MACs
 remain blank until a device supplies one. MAC metadata is saved and LAN-synced.
+
+0.3.4: Use Details or double-click a device row to view full errors. Ctrl+C
+copies the dialog. Kasa sessions are reused; temporary status failures get one
+retry. Changing account credentials causes a fresh authentication.
