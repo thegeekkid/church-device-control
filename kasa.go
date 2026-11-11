@@ -102,15 +102,8 @@ func devicePower(t TV, cmd string) error {
 			if e != nil {
 				return e
 			}
-			var result struct {
-				System struct {
-					Set struct {
-						Code *int `json:"err_code"`
-					} `json:"set_relay_state"`
-				}
-			}
-			if decodeKasa(response, &result) != nil || result.System.Set.Code == nil || *result.System.Set.Code != 0 {
-				return fmt.Errorf("Kasa rejected relay command")
+			if e := relayCommandResult(response); e != nil {
+				return fmt.Errorf("Kasa %s: %w", cmd, e)
 			}
 			return nil
 		}
@@ -246,4 +239,30 @@ func probeKasa(ctx context.Context, ip string) (*tapo.Strip, tapo.RawResponse, e
 		}
 	}
 	return nil, nil, fmt.Errorf("Kasa KLAP authentication mismatch after account and setup modes; model/firmware or device account binding may be incompatible")
+}
+
+func relayCommandResult(response any) error {
+	var result struct {
+		Code    *int   `json:"error_code"`
+		Message string `json:"msg"`
+		System  struct {
+			Set struct {
+				Code    *int   `json:"err_code"`
+				Message string `json:"err_msg"`
+			} `json:"set_relay_state"`
+		}
+	}
+	if e := decodeKasa(response, &result); e != nil {
+		return fmt.Errorf("invalid relay response: %w", e)
+	}
+	if result.Code != nil && *result.Code != 0 {
+		return fmt.Errorf("device error %d: %s", *result.Code, result.Message)
+	}
+	if result.System.Set.Code == nil {
+		return fmt.Errorf("device response omitted system.set_relay_state.err_code")
+	}
+	if *result.System.Set.Code != 0 {
+		return fmt.Errorf("relay error %d: %s", *result.System.Set.Code, result.System.Set.Message)
+	}
+	return nil
 }

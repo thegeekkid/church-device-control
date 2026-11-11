@@ -7,6 +7,8 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
+	"fmt"
 	"github.com/pborges/tapo"
 	"io"
 	"net"
@@ -25,6 +27,7 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 	var local []byte
 	var mu sync.Mutex
 	var authenticated bool
+	relay := 1
 	hash := func(b ...[]byte) []byte {
 		var v []byte
 		for _, p := range b {
@@ -60,10 +63,32 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 			ivSeed := hash([]byte("iv"), local, remote, auth[:])
 			iv := append(append([]byte(nil), ivSeed[:12]...), encoded...)
 			sign := hash([]byte("ldk"), local, remote, auth[:])
-			plain := []byte(`{"system":{"get_sysinfo":{"err_code":0,"alias":"Test HS103","model":"HS103","deviceId":"hs103-test","relay_state":1}}}`)
+			block, _ := aes.NewCipher(key[:16])
+			if len(body) < 48 || !bytes.Equal(body[:32], hash(sign[:28], encoded, body[32:])) {
+				t.Error("invalid command signature")
+				w.WriteHeader(400)
+				return
+			}
+			command := make([]byte, len(body)-32)
+			cipher.NewCBCDecrypter(block, iv).CryptBlocks(command, body[32:])
+			command = command[:len(command)-int(command[len(command)-1])]
+			var req struct {
+				System struct {
+					Set *struct{ State int } `json:"set_relay_state"`
+				}
+			}
+			if e := json.Unmarshal(command, &req); e != nil {
+				t.Error(e)
+				w.WriteHeader(400)
+				return
+			}
+			plain := []byte(fmt.Sprintf(`{"system":{"get_sysinfo":{"err_code":0,"alias":"Test HS103","model":"HS103","deviceId":"hs103-test","relay_state":%d}}}`, relay))
+			if req.System.Set != nil {
+				relay = req.System.Set.State
+				plain = []byte(`{"system":{"set_relay_state":{"err_code":0}}}`)
+			}
 			pad := 16 - len(plain)%16
 			plain = append(plain, bytes.Repeat([]byte{byte(pad)}, pad)...)
-			block, _ := aes.NewCipher(key[:16])
 			encrypted := make([]byte, len(plain))
 			cipher.NewCBCEncrypter(block, iv).CryptBlocks(encrypted, plain)
 			w.Write(append(hash(sign[:28], encoded, encrypted), encrypted...))
@@ -91,4 +116,14 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 	if e != nil || tv.Power != "PowerOn" || tv.Model != "HS103" {
 		t.Fatalf("%+v %v", tv, e)
 	}
+	for _, c := range []struct{ cmd, power string }{{"PowerOff", "PowerOff"}, {"PowerOn", "PowerOn"}} {
+		if e := devicePower(tv, c.cmd); e != nil {
+			t.Fatal(e)
+		}
+		got, e := inspectKasa(tv.IP)
+		if e != nil || got.Power != c.power {
+			t.Fatalf("%s: %+v %v", c.cmd, got, e)
+		}
+	}
+
 }

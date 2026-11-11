@@ -299,8 +299,12 @@ func refreshTVs(tvs []TV) string {
 }
 func sendPower(tvs []TV, cmd string) string {
 	ok := 0
+	var failures []string
 	for _, t := range tvs {
 		e := devicePower(t, cmd)
+		if e != nil {
+			failures = append(failures, t.Name+": "+e.Error())
+		}
 		state.Lock()
 		for i := range state.TVs {
 			if state.TVs[i].IP == t.IP {
@@ -314,7 +318,11 @@ func sendPower(tvs []TV, cmd string) string {
 		}
 		state.Unlock()
 	}
-	return fmt.Sprintf("%s: %d of %d accepted. Acceptance does not confirm the screen changed.", cmd, ok, len(tvs))
+	message := fmt.Sprintf("%s: %d of %d accepted. Acceptance does not confirm the screen changed.", cmd, ok, len(tvs))
+	if len(failures) > 0 {
+		message += " Failed — " + strings.Join(failures, "; ")
+	}
+	return message
 }
 
 // Keep the delay and network queries in the existing background job so the

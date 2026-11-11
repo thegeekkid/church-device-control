@@ -80,4 +80,35 @@ func TestLegacyKasaPowerAndStatus(t *testing.T) {
 	if e != nil || tv.Power != "PowerOff" {
 		t.Fatalf("%+v %v", tv, e)
 	}
+	if e = devicePower(tv, "PowerOn"); e != nil {
+		t.Fatal(e)
+	}
+	tv, e = inspectDevice(tv)
+	if e != nil || tv.Power != "PowerOn" {
+		t.Fatalf("PowerOn after PowerOff: %+v %v", tv, e)
+	}
+
+}
+
+func TestRelayErrorsRetainDeviceDetails(t *testing.T) {
+	for _, c := range []struct {
+		response string
+		want     string
+	}{
+		{`{"system":{"set_relay_state":{"err_code":0}}}`, ""},
+		{`{"system":{"set_relay_state":{"err_code":-1,"err_msg":"generic error"}}}`, "relay error -1: generic error"},
+		{`{"error_code":-1002,"msg":"permission denied"}`, "device error -1002: permission denied"},
+		{`{"system":{}}`, "device response omitted system.set_relay_state.err_code"},
+	} {
+		var v any
+		json.Unmarshal([]byte(c.response), &v)
+		e := relayCommandResult(v)
+		if c.want == "" {
+			if e != nil {
+				t.Fatal(e)
+			}
+		} else if e == nil || e.Error() != c.want {
+			t.Fatalf("got %v want %s", e, c.want)
+		}
+	}
 }
