@@ -51,7 +51,7 @@ func TestLegacyKasaPowerAndStatus(t *testing.T) {
 					relay = r.State
 					response = map[string]any{"system": map[string]any{"set_relay_state": map[string]int{"err_code": 0}}}
 				} else {
-					response = map[string]any{"system": map[string]any{"get_sysinfo": map[string]any{"alias": "Test plug", "model": "HS103", "deviceId": "test-device", "relay_state": relay, "err_code": 0}}}
+					response = map[string]any{"system": map[string]any{"get_sysinfo": map[string]any{"alias": "Test plug", "model": "HS103", "deviceId": "test-device", "mac": "11-22-33-44-55-66", "relay_state": relay, "err_code": 0}}}
 				}
 				out, _ := json.Marshal(response)
 				key = 171
@@ -70,7 +70,7 @@ func TestLegacyKasaPowerAndStatus(t *testing.T) {
 	connectKasa = func(ip string) (*tapo.Strip, error) { return tapo.New(ip, tapo.WithPort(n)) }
 	defer func() { connectKasa = old }()
 	tv, e := inspectKasa("127.0.0.1")
-	if e != nil || tv.Power != "PowerOn" || tv.Kind != "kasa" {
+	if e != nil || tv.Power != "PowerOn" || tv.Kind != "kasa" || tv.MAC != "11:22:33:44:55:66" {
 		t.Fatalf("%+v %v", tv, e)
 	}
 	if e = devicePower(tv, "PowerOff"); e != nil {

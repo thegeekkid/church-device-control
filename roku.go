@@ -17,6 +17,7 @@ import (
 
 type TV struct {
 	IP      string
+	MAC     string
 	Name    string
 	Model   string
 	Serial  string
@@ -27,12 +28,15 @@ type TV struct {
 	Updated int64
 }
 type deviceInfo struct {
-	XMLName xml.Name `xml:"device-info"`
-	Name    string   `xml:"friendly-device-name"`
-	Model   string   `xml:"model-name"`
-	Serial  string   `xml:"serial-number"`
-	Power   string   `xml:"power-mode"`
-	IsTV    string   `xml:"is-tv"`
+	XMLName     xml.Name `xml:"device-info"`
+	Name        string   `xml:"friendly-device-name"`
+	Model       string   `xml:"model-name"`
+	Serial      string   `xml:"serial-number"`
+	Power       string   `xml:"power-mode"`
+	IsTV        string   `xml:"is-tv"`
+	NetworkType string   `xml:"network-type"`
+	WiFiMAC     string   `xml:"wifi-mac"`
+	EthernetMAC string   `xml:"ethernet-mac"`
 }
 
 var client = &http.Client{Timeout: 4 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -64,7 +68,7 @@ func inspect(ip string) (TV, error) {
 	if name == "" {
 		name = d.Model
 	}
-	return TV{IP: ip, Name: name, Model: d.Model, Serial: d.Serial, Power: d.Power, Status: "Reachable"}, nil
+	return TV{IP: ip, Name: name, Model: d.Model, Serial: d.Serial, Power: d.Power, Status: "Reachable", MAC: rokuMAC(d)}, nil
 }
 func power(ip, cmd string) error {
 	if !validIP(ip) || (cmd != "PowerOn" && cmd != "PowerOff") {
@@ -217,6 +221,9 @@ func upsert(t TV) {
 	for i, old := range state.TVs {
 		if old.IP == t.IP || (old.Serial != "" && old.Serial == t.Serial) {
 			t.Name = old.Name
+			if t.MAC == "" {
+				t.MAC = old.MAC
+			}
 			if t.Serial == "" {
 				t.Serial = old.Serial
 			}
@@ -225,7 +232,7 @@ func upsert(t TV) {
 			if t.Kind == "" {
 				t.Kind = old.Kind
 			}
-			if t.IP != old.IP || t.Serial != old.Serial {
+			if t.IP != old.IP || t.Serial != old.Serial || t.MAC != old.MAC {
 				t.Updated = time.Now().UnixNano()
 			}
 			state.TVs[i] = t
@@ -346,4 +353,32 @@ func tvIndicator(t TV) (int, string) {
 	default:
 		return 2, "Unknown"
 	}
+}
+
+func normalizeMAC(value string) string {
+	mac, e := net.ParseMAC(strings.TrimSpace(value))
+	if e != nil {
+		return ""
+	}
+	return strings.ToUpper(mac.String())
+}
+func rokuMAC(d deviceInfo) string {
+	wifi, wired := normalizeMAC(d.WiFiMAC), normalizeMAC(d.EthernetMAC)
+	switch strings.ToLower(strings.TrimSpace(d.NetworkType)) {
+	case "wifi", "wireless":
+		if wifi != "" {
+			return wifi
+		}
+	case "ethernet", "wired":
+		if wired != "" {
+			return wired
+		}
+	}
+	if wifi != "" && wired != "" && wifi != wired {
+		return wifi + " / " + wired
+	}
+	if wifi != "" {
+		return wifi
+	}
+	return wired
 }

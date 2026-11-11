@@ -30,7 +30,7 @@ func TestRokuProtocol(t *testing.T) {
 		calls = append(calls, r.Method+" "+r.URL.Path)
 		switch r.URL.Path {
 		case "/query/device-info":
-			io.WriteString(w, `<device-info><is-tv>true</is-tv><friendly-device-name>Lobby</friendly-device-name><serial-number>abc</serial-number><model-name>TCL</model-name><power-mode>PowerOn</power-mode></device-info>`)
+			io.WriteString(w, `<device-info><is-tv>true</is-tv><friendly-device-name>Lobby</friendly-device-name><serial-number>abc</serial-number><network-type>wifi</network-type><wifi-mac>aa:bb:cc:dd:ee:ff</wifi-mac><model-name>TCL</model-name><power-mode>PowerOn</power-mode></device-info>`)
 		case "/keypress/PowerOn", "/keypress/PowerOff":
 			w.WriteHeader(200)
 		default:
@@ -42,7 +42,7 @@ func TestRokuProtocol(t *testing.T) {
 	client = &http.Client{Transport: rewriteTransport{s.URL, http.DefaultTransport}}
 	defer func() { client = old }()
 	tv, e := inspect("192.168.1.2")
-	if e != nil || tv.Name != "Lobby" || tv.Power != "PowerOn" {
+	if e != nil || tv.Name != "Lobby" || tv.Power != "PowerOn" || tv.MAC != "AA:BB:CC:DD:EE:FF" {
 		t.Fatalf("%+v %v", tv, e)
 	}
 	for _, cmd := range []string{"PowerOn", "PowerOff"} {
@@ -211,5 +211,31 @@ func TestStartupRefreshUsesSavedTVs(t *testing.T) {
 	tvs := snapshot()
 	if len(tvs) != 1 || tvs[0].Name != "Lobby" || tvs[0].Power != "PowerOn" || tvs[0].Status != "Reachable" {
 		t.Fatal(tvs)
+	}
+}
+
+func TestMACInterfaceAndCachedAddress(t *testing.T) {
+	d := deviceInfo{NetworkType: "ethernet", WiFiMAC: "11:22:33:44:55:66", EthernetMAC: "aa-bb-cc-dd-ee-ff"}
+	if got := rokuMAC(d); got != "AA:BB:CC:DD:EE:FF" {
+		t.Fatal(got)
+	}
+	d.NetworkType = ""
+	if got := rokuMAC(d); got != "11:22:33:44:55:66 / AA:BB:CC:DD:EE:FF" {
+		t.Fatal(got)
+	}
+	if normalizeMAC("unavailable") != "" {
+		t.Fatal("invalid MAC displayed")
+	}
+	state.TVs = []TV{{IP: "192.168.1.5", Name: "Lobby", MAC: "AA:BB:CC:DD:EE:FF", Updated: 1}}
+	state.Deleted = nil
+	upsert(TV{IP: "192.168.1.5", Name: "Factory", Status: "Unreachable"})
+	if snapshot()[0].MAC != "AA:BB:CC:DD:EE:FF" {
+		t.Fatal("cached MAC lost")
+	}
+	state.Lock()
+	packet := configSnapshotLocked(true)
+	state.Unlock()
+	if packet.Devices[0].MAC != "AA:BB:CC:DD:EE:FF" {
+		t.Fatal("MAC omitted from settings sync")
 	}
 }

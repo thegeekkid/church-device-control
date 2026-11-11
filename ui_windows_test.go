@@ -43,7 +43,7 @@ func TestNativeTableAndIcon(t *testing.T) {
 	if list == 0 {
 		t.Fatal("ListView creation failed")
 	}
-	state.TVs = []TV{{Name: "Lobby", IP: "192.168.1.5", Power: "PowerOn", Status: "Reachable"}, {Name: "Sanctuary", IP: "192.168.1.6", Power: "Ready", Status: "Reachable"}, {Name: "Classroom", IP: "192.168.1.7", Status: "Unreachable"}}
+	state.TVs = []TV{{Name: "Lobby", IP: "192.168.1.5", MAC: "AA:BB:CC:DD:EE:FF", Power: "PowerOn", Status: "Reachable"}, {Name: "Sanctuary", IP: "192.168.1.6", Power: "Ready", Status: "Reachable"}, {Name: "Classroom", IP: "192.168.1.7", Status: "Unreachable"}}
 	state.Dirty = true
 	update()
 	if count := callmsg(list, 0x1004, 0, 0); count != 3 {
@@ -58,7 +58,7 @@ func TestNativeTableAndIcon(t *testing.T) {
 	for _, c := range []struct {
 		row, col int
 		want     string
-	}{{0, 0, "On"}, {0, 1, "Lobby"}, {0, 4, "192.168.1.5"}, {1, 0, "Off"}, {2, 0, "Unknown"}} {
+	}{{0, 0, "On"}, {0, 1, "Lobby"}, {0, 4, "192.168.1.5"}, {0, 5, "AA:BB:CC:DD:EE:FF"}, {1, 0, "Off"}, {2, 0, "Unknown"}} {
 		if got := getCell(c.row, c.col); got != c.want {
 			t.Errorf("cell %d,%d = %q want %q", c.row, c.col, got, c.want)
 		}
@@ -78,8 +78,8 @@ func TestNativeTableAndIcon(t *testing.T) {
 	if selected() != 1 {
 		t.Fatal("selection lost after refresh")
 	}
-	if header := callmsg(list, 0x101F, 0, 0); callmsg(header, 0x1200, 0, 0) != 7 {
-		t.Fatal("table must contain seven columns")
+	if header := callmsg(list, 0x101F, 0, 0); callmsg(header, 0x1200, 0, 0) != 8 {
+		t.Fatal("table must contain eight columns")
 	}
 	// Capture the real native table so the release can also receive visual inspection.
 	user.NewProc("ShowWindow").Call(win, 1)

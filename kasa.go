@@ -40,9 +40,9 @@ func inspectKasa(ip string) (TV, error) {
 		var r struct {
 			System struct {
 				Info struct {
-					Alias, Model, DeviceID string
-					Relay                  *int `json:"relay_state"`
-					Code                   int  `json:"err_code"`
+					Alias, Model, DeviceID, MAC string
+					Relay                       *int `json:"relay_state"`
+					Code                        int  `json:"err_code"`
 				} `json:"get_sysinfo"`
 			}
 		}
@@ -52,7 +52,7 @@ func inspectKasa(ip string) (TV, error) {
 			if *d.Relay != 0 {
 				p = "PowerOn"
 			}
-			return TV{IP: ip, Name: d.Alias, Model: d.Model, Serial: d.DeviceID, Kind: "kasa", Power: p, Status: "Reachable"}, nil
+			return TV{IP: ip, Name: d.Alias, Model: d.Model, Serial: d.DeviceID, MAC: normalizeMAC(d.MAC), Kind: "kasa", Power: p, Status: "Reachable"}, nil
 		}
 	}
 	info, e := c.Info(ctx)
@@ -70,7 +70,7 @@ func inspectKasa(ip string) (TV, error) {
 	if outlets[0].On {
 		p = "PowerOn"
 	}
-	return TV{IP: ip, Name: info.Alias, Model: info.Model, Serial: info.DeviceID, Kind: "kasa", Power: p, Status: "Reachable"}, nil
+	return TV{IP: ip, Name: info.Alias, Model: info.Model, Serial: info.DeviceID, MAC: normalizeMAC(info.MAC), Kind: "kasa", Power: p, Status: "Reachable"}, nil
 }
 func devicePower(t TV, cmd string) error {
 	if t.Kind != "kasa" {
@@ -147,7 +147,7 @@ func discoverKasa() string {
 				upsert(t)
 				n++
 			} else {
-				upsert(TV{IP: d.Host, Name: d.Device.Alias, Model: d.Device.Model, Kind: "kasa", Status: "Failed: " + e.Error()})
+				upsert(TV{IP: d.Host, Name: d.Device.Alias, Model: d.Device.Model, MAC: normalizeMAC(d.Device.MAC), Kind: "kasa", Status: "Failed: " + e.Error()})
 			}
 		}
 	}

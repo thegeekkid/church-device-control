@@ -89,7 +89,7 @@ func initTable() {
 	columns := []struct {
 		name  string
 		width int
-	}{{"Status", 90}, {"Device name", 190}, {"Room", 140}, {"Type", 65}, {"IP address", 140}, {"Reported power", 110}, {"Last result", 270}}
+	}{{"Status", 90}, {"Device name", 190}, {"Room", 140}, {"Type", 65}, {"IP address", 140}, {"MAC address", 190}, {"Reported power", 110}, {"Last result", 270}}
 	for i, c := range columns {
 		col := lvColumn{Mask: 7, Width: int32(c.width), Text: w(c.name)}
 		callmsg(list, 0x1061, uintptr(i), uintptr(unsafe.Pointer(&col)))
@@ -169,7 +169,7 @@ func update() {
 		image, text := tvIndicator(t)
 		item := lvItem{Mask: 3, Item: int32(row), Text: w(text), Image: int32(image)}
 		callmsg(list, 0x104D, 0, uintptr(unsafe.Pointer(&item)))
-		for col, value := range []string{t.Name, t.Room, deviceKind(t), t.IP, t.Power, t.Status} {
+		for col, value := range []string{t.Name, t.Room, deviceKind(t), t.IP, t.MAC, t.Power, t.Status} {
 			setCell(row, col+1, value)
 		}
 	}
