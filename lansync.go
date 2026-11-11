@@ -128,6 +128,9 @@ func mergeConfig(c sharedConfig) bool {
 			lb, _ := json.Marshal(l)
 			rb, _ := json.Marshal(r)
 			if remote.Updated > local.Updated || (remote.Updated == local.Updated && string(rb) > string(lb)) {
+				if remote.MAC == "" {
+					remote.MAC = local.MAC
+				}
 				remote.Power = local.Power
 				remote.Status = local.Status
 				state.TVs[i] = remote

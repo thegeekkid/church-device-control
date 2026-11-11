@@ -10,7 +10,7 @@ import (
 func TestEncryptedSettingsMergeAndDeletion(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("APPDATA", t.TempDir())
-	state.TVs = []TV{{IP: "192.168.1.5", Name: "Lobby TV", Room: "Lobby", Updated: 10, Power: "PowerOn", Status: "Reachable"}}
+	state.TVs = []TV{{IP: "192.168.1.5", Name: "Lobby TV", Room: "Lobby", MAC: "AA:BB:CC:DD:EE:FF", Updated: 10, Power: "PowerOn", Status: "Reachable"}}
 	state.Deleted = map[string]int64{}
 	key := "0123456789abcdef0123456789abcdef"
 	c := sharedConfig{Version: 1, Devices: []TV{{IP: "192.168.1.5", Name: "Front TV", Room: "Lobby", Updated: 20, Power: "PowerOff", Status: "Reachable"}}}
@@ -34,7 +34,7 @@ func TestEncryptedSettingsMergeAndDeletion(t *testing.T) {
 		t.Fatal("did not merge")
 	}
 	tv := snapshot()[0]
-	if tv.Name != "Front TV" || tv.Power != "PowerOn" {
+	if tv.Name != "Front TV" || tv.Power != "PowerOn" || tv.MAC != "AA:BB:CC:DD:EE:FF" {
 		t.Fatal(tv)
 	}
 	mergeConfig(sharedConfig{Version: 1, Devices: []TV{{IP: tv.IP, Name: "old", Updated: 5}}})
