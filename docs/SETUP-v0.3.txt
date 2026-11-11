@@ -74,7 +74,7 @@ Do not run older versions concurrently: they do not understand the new format.
 0.3.1: KLAP setup-account mode is tried automatically after a normal account
 authentication mismatch. Keep your normal TP-Link credentials in Settings.
 
-NEXT BUILD: MAC addresses appear beside the IP address and remain cached when
+0.3.2: MAC addresses appear beside the IP address and remain cached when
 devices are unreachable. Roku uses the active interface when the device reports
 it; otherwise both available Wi-Fi/Ethernet addresses are shown. Missing MACs
 remain blank until a device supplies one. MAC metadata is saved and LAN-synced.

@@ -1,0 +1,12 @@
+Church Device Control v0.3.2
+
+- Show MAC addresses beside IP addresses for Roku TVs and Kasa plugs.
+- Use the Roku active interface when reported; otherwise show both available Wi-Fi/Ethernet addresses.
+- Normalize MAC formatting, retain known MACs while devices are offline, and include MAC metadata in saved settings and encrypted LAN sync.
+- Preserve cached MACs when syncing changes from an older installation without MAC support.
+
+Includes the Kasa authentication compatibility update from v0.3.1. The user's physical HS103 authentication remains unverified. Devices that do not report a MAC leave the column blank until one is available. Columns can be resized and the table scrolls horizontally.
+
+Signed standalone EXE, installer and portable ZIP. Replace the previous executable or run the installer; saved devices, room assignments and local credentials are preserved.
+
+Validation covers Roku/Kasa MAC extraction, interface selection, cached and synchronized MAC retention, native Windows table contents, existing device protocols, installer checks in both scopes, and application/installer signatures.
