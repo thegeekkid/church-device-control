@@ -70,3 +70,6 @@ FILES
 %APPDATA%\ChurchRoku\tvs-v0.2-backup.json: preserved old-format list.
 %APPDATA%\ChurchRoku\local-secrets.bin: DPAPI-protected local credentials/key.
 Do not run older versions concurrently: they do not understand the new format.
+
+0.3.1: KLAP setup-account mode is tried automatically after a normal account
+authentication mismatch. Keep your normal TP-Link credentials in Settings.

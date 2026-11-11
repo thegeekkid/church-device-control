@@ -1,0 +1,9 @@
+Church Device Control v0.3.1
+
+Adds a local KLAP authentication fallback for Kasa firmware that uses the account email with the device setup credential. Normal account credentials are still tried first; setup mode is attempted only after a KLAP challenge mismatch. No account password changes, cloud login, OAuth flow, or MFA changes are involved.
+
+Discovery now preserves the actual Kasa error rather than always asking for credentials. Periodic refresh also preserves Kasa error details instead of labeling every failure Unreachable.
+
+Validation includes a simulated KLAP v2 plug that rejects normal credentials and accepts only the account-email/setup-credential combination, along with existing protocol, sync, Windows, installer and signing checks. This compatibility path is not yet confirmed against the user's physical HS103 running firmware 1.1.3.
+
+Reference: https://github.com/python-kasa/python-kasa/pull/1840

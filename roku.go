@@ -275,7 +275,11 @@ func refreshTVs(tvs []TV) string {
 			state.Lock()
 			for i := range state.TVs {
 				if state.TVs[i].IP == t.IP {
-					state.TVs[i].Status = "Unreachable (asleep or offline)"
+					if t.Kind == "kasa" {
+						state.TVs[i].Status = "Failed: " + e.Error()
+					} else {
+						state.TVs[i].Status = "Unreachable (asleep or offline)"
+					}
 					state.TVs[i].Power = "unknown"
 				}
 			}

@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/pborges/tapo"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -28,14 +30,12 @@ func inspectDevice(t TV) (TV, error) {
 	return inspect(t.IP)
 }
 func inspectKasa(ip string) (TV, error) {
-	c, e := connectKasa(ip)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	c, raw, e := probeKasa(ctx, ip)
 	if e != nil {
 		return TV{}, e
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	// Raw legacy requests also work over authenticated KLAP on newer Kasa IOT plugs.
-	raw, e := c.Query(ctx, map[string]any{"system": map[string]any{"get_sysinfo": nil}})
 	if e == nil {
 		var r struct {
 			System struct {
@@ -79,13 +79,12 @@ func devicePower(t TV, cmd string) error {
 	if cmd != "PowerOn" && cmd != "PowerOff" {
 		return fmt.Errorf("invalid command")
 	}
-	c, e := connectKasa(t.IP)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	c, raw, e := probeKasa(ctx, t.IP)
 	if e != nil {
 		return e
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	raw, e := c.Query(ctx, map[string]any{"system": map[string]any{"get_sysinfo": nil}})
 	if e == nil {
 		var r struct {
 			System struct {
@@ -148,7 +147,7 @@ func discoverKasa() string {
 				upsert(t)
 				n++
 			} else {
-				upsert(TV{IP: d.Host, Name: d.Device.Alias, Model: d.Device.Model, Kind: "kasa", Status: "Found — enter Kasa credentials and refresh"})
+				upsert(TV{IP: d.Host, Name: d.Device.Alias, Model: d.Device.Model, Kind: "kasa", Status: "Failed: " + e.Error()})
 			}
 		}
 	}
@@ -201,4 +200,50 @@ func legacyKasaIPs() []string {
 		out = append(out, ip)
 	}
 	return out
+}
+
+// Account credentials remain the first choice. Newer Kasa IOT firmware may
+// instead use the account e-mail + kasaSetup for the local KLAP handshake.
+// Reference: python-kasa/python-kasa#1840. This never changes cloud credentials.
+var setupKasaClient = func(ip, user string) (*tapo.Strip, error) {
+	return tapo.New(ip, tapo.WithCredentials(user, "kasaSetup"), tapo.WithTimeout(3*time.Second), tapo.WithDisableLegacy())
+}
+
+func probeKasa(ctx context.Context, ip string) (*tapo.Strip, tapo.RawResponse, error) {
+	c, e := connectKasa(ip)
+	if e != nil {
+		return nil, nil, e
+	}
+	request := map[string]any{"system": map[string]any{"get_sysinfo": nil}}
+	r, e := c.Query(ctx, request)
+	if e == nil {
+		return c, r, nil
+	}
+	var auth *tapo.AuthenticationError
+	if !errors.As(e, &auth) {
+		return nil, nil, fmt.Errorf("Kasa connection/protocol error: %w", e)
+	}
+	secrets.Lock()
+	user := secrets.User
+	secrets.Unlock()
+	candidates := []string{user, strings.ToLower(strings.TrimSpace(user))}
+	seen := map[string]bool{}
+	for _, u := range candidates {
+		if u == "" || seen[u] {
+			continue
+		}
+		seen[u] = true
+		candidate, ce := setupKasaClient(ip, u)
+		if ce != nil {
+			return nil, nil, ce
+		}
+		response, ce := candidate.Query(ctx, request)
+		if ce == nil {
+			return candidate, response, nil
+		}
+		if !errors.As(ce, &auth) {
+			return nil, nil, fmt.Errorf("Kasa setup-mode connection/protocol error: %w", ce)
+		}
+	}
+	return nil, nil, fmt.Errorf("Kasa KLAP authentication mismatch after account and setup modes; model/firmware or device account binding may be incompatible")
 }
