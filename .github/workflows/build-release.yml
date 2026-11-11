@@ -4,7 +4,7 @@ on:
     inputs:
       release_tag:
         description: Version tag (update resource metadata and release notes for a new version)
-        default: v0.3.2
+        default: v0.3.3
         required: true
         type: string
       sign:
@@ -135,8 +135,17 @@ jobs:
           }
           foreach ($mode in @('CURRENTUSER','ALLUSERS')) {
             $target = Join-Path $env:RUNNER_TEMP "church-control-$mode"
-            $p = Start-Process dist/Church-Device-Control-Setup.exe -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/$mode",'/NOICONS',"/DIR=$target") -PassThru -Wait
+            $p = Start-Process dist/Church-Device-Control-Setup.exe -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/$mode",'/TASKS=taskbarhelp',"/DIR=$target") -PassThru -Wait
             if ($p.ExitCode -ne 0 -or -not (Test-Path "$target/Church-TV-Control.exe")) { throw "Installation failed: $mode" }
+            $shortcut = "$target/Church Device Control.lnk"
+            if (-not (Test-Path $shortcut)) { throw "Taskbar helper shortcut missing: $mode" }
+            $shell = New-Object -ComObject WScript.Shell
+            if ($shell.CreateShortcut($shortcut).TargetPath -ne "$target\Church-TV-Control.exe") { throw 'Shortcut points to the wrong executable' }
+            $helperLine = Get-Content installer/setup.iss | Where-Object { $_ -match '^Filename:.*Tasks: taskbarhelp;' }
+            if ($helperLine -notmatch '^Filename: "([^"]+)"') { throw 'Taskbar helper command not found' }
+            $explorer = $Matches[1].Replace('{win}', $env:WINDIR).Replace('{sys}', [Environment]::SystemDirectory)
+            if (-not (Test-Path $explorer)) { throw "Taskbar helper executable missing: $explorer" }
+            Start-Process -FilePath $explorer -ArgumentList "/select,`"$shortcut`"" -ErrorAction Stop
             $p = Start-Process "$target/unins000.exe" -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -PassThru -Wait
             if ($p.ExitCode -ne 0 -or (Test-Path "$target/Church-TV-Control.exe")) { throw "Uninstall failed: $mode" }
           }

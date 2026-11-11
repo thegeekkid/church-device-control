@@ -1,4 +1,4 @@
-#define AppVersion "0.3.2"
+#define AppVersion "0.3.3"
 [Setup]
 AppId={{507DE0A3-7082-4830-A477-DC1A5325DC31}
 AppName=Church Device Control
@@ -31,4 +31,4 @@ Name: "{group}\Church Device Control"; Filename: "{app}\Church-TV-Control.exe"; 
 Name: "{app}\Church Device Control"; Filename: "{app}\Church-TV-Control.exe"; Tasks: taskbarhelp
 [Run]
 Filename: "{app}\Church-TV-Control.exe"; Description: "Open Church Device Control"; Flags: nowait postinstall skipifsilent
-Filename: "{sys}\explorer.exe"; Parameters: "/select,""{app}\Church Device Control.lnk"""; Tasks: taskbarhelp; Flags: postinstall skipifsilent nowait; Description: "Show shortcut (right-click it, then choose Pin to taskbar; Show more options may be needed)"
+Filename: "{win}\explorer.exe"; Parameters: "/select,""{app}\Church Device Control.lnk"""; Tasks: taskbarhelp; Flags: postinstall skipifsilent nowait runasoriginaluser; Description: "Show shortcut (right-click it, then choose Pin to taskbar; Show more options may be needed)"

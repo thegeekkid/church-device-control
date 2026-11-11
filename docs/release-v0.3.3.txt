@@ -1,0 +1,9 @@
+Church Device Control v0.3.3
+
+Fix the optional end-of-install shortcut helper: Explorer is launched from the Windows directory instead of System32, under the original user context. This resolves CreateProcess error 2 when selecting Show shortcut.
+
+Installer validation now selects the taskbar-helper option, verifies that its shortcut targets the installed app, resolves the helper executable from the installer source, and launches Explorer with the shortcut selected in both per-user and all-users installs.
+
+Includes all v0.3.2 features and the Kasa compatibility changes. Application and installer are signed with Azure Artifact Signing. Installing over the current version preserves saved devices, rooms and credentials.
+
+Workaround for older installers: dismiss the helper error, open the installation folder manually, and right-click Church Device Control.lnk to pin it to the taskbar. The error affects the optional helper, not the installed application.
