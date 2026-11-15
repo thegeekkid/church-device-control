@@ -1,9 +1,7 @@
 package main
 
 import (
-	"crypto/rand"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"runtime"
 	"strings"
@@ -368,10 +366,11 @@ func action(id int) {
 		}
 		runJob(func() string { return syncNow() })
 	case 14:
-		b := make([]byte, 16)
-		if _, e := rand.Read(b); e == nil {
-			label(syncBox, hex.EncodeToString(b))
+		if key, e := generateSyncKey(); e == nil {
+			label(syncBox, key)
 			label(status, "New sync key generated. Save settings, then copy this key to your other PCs.")
+		} else {
+			label(status, "Could not generate a sync key: "+e.Error())
 		}
 	case 15:
 		runJob(periodicWork)
@@ -487,7 +486,7 @@ func main() {
 		defer kernel.NewProc("CloseHandle").Call(mutex)
 	}
 	load()
-	loadSecrets()
+	settingsErr := loadSecrets()
 	user.NewProc("SetProcessDPIAware").Call()
 	init := struct{ Size, Classes uint32 }{8, 1}
 	common.NewProc("InitCommonControlsEx").Call(uintptr(unsafe.Pointer(&init)))
@@ -541,6 +540,10 @@ func main() {
 	update()
 	user.NewProc("ShowWindow").Call(win, 1)
 	user.NewProc("UpdateWindow").Call(win)
+	if settingsErr != nil {
+		body := "Saved Kasa credentials and the LAN sync key could not be loaded.\r\n\r\n" + settingsErr.Error() + "\r\n\r\nOpen Settings to re-enter them. Your saved devices and rooms are retained."
+		user.NewProc("MessageBoxW").Call(win, uintptr(unsafe.Pointer(w(body))), uintptr(unsafe.Pointer(w("Local settings could not be loaded"))), 0x30)
+	}
 	startLAN()
 	syncStatus(syncNow())
 	user.NewProc("SetTimer").Call(win, 2, 60000, 0)

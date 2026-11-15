@@ -1,0 +1,9 @@
+Church Device Control v0.4.3
+
+Tighten validation of Roku/Kasa metadata, Kasa relay responses, and incoming sync settings. Malformed status replies cannot trigger relay commands.
+
+Suppress duplicate sync packets and check the age of packets from updated peers. Existing sync keys and older installations remain compatible. Generate key now creates a 256-bit random key; no key replacement is required.
+
+Show a useful startup error if saved credentials cannot be loaded, clear temporary credential buffers, and discard cached Kasa clients when account credentials change. Saved devices and rooms are retained.
+
+Add comments explaining authentication, DPAPI storage, bounded responses, and compatibility boundaries. Verify pinned dependency contents in CI and release builds.

@@ -143,11 +143,42 @@ func TestWindowsProtectedCredentials(t *testing.T) {
 	secrets.Lock()
 	secrets.Password = ""
 	secrets.Unlock()
-	loadSecrets()
+	if e := loadSecrets(); e != nil {
+		t.Fatal(e)
+	}
 	secrets.Lock()
 	got := secrets.Password
 	secrets.Unlock()
 	if got != "test-password" {
 		t.Fatal("DPAPI roundtrip failed")
+	}
+	// DPAPI-protected data must not round-trip after the ciphertext is damaged.
+	b[len(b)/2] ^= 1
+	if e := os.WriteFile(secretPath(), b, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := loadSecrets(); e == nil {
+		t.Fatal("corrupt credential file was silently accepted")
+	}
+	// Valid DPAPI wrapping does not make invalid credential JSON acceptable.
+	invalid, e := protect([]byte(`{"Password":"do-not-log-this-value"`))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(secretPath(), invalid, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e = loadSecrets(); e == nil || strings.Contains(e.Error(), "do-not-log-this-value") {
+		t.Fatal("invalid JSON was accepted or exposed in an error", e)
+	}
+	null, e := protect([]byte(`null`))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(secretPath(), null, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e = loadSecrets(); e == nil {
+		t.Fatal("null credentials were accepted")
 	}
 }

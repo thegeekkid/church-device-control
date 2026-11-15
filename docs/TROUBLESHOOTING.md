@@ -23,6 +23,8 @@ An accepted command is not proof that the screen changed. The app checks again a
 3. In **Settings**, enter the owning account's email and password, then **Save local settings** before retrying. Set credentials separately on every PC.
 4. Open **Details** for the full error. Include the model and firmware when reporting a problem.
 
+If startup reports that saved credentials could not be loaded, open **Settings** and re-enter the account credentials and LAN sync key. Saved devices and rooms are retained. This can happen if the protected file is damaged or copied from another Windows user or PC.
+
 The app authenticates locally with the device; it does not use a cloud OAuth sign-in or an interactive MFA prompt. An authentication failure by itself does not establish that MFA is responsible. Only legacy XOR and KLAP v1/v2 are supported. The app tries a local setup-account fallback automatically when an ordinary account authentication mismatch permits it.
 
 Authenticated sessions are reused, and a temporary status failure gets one retry. Changing credentials causes fresh authentication. A failed power command is not automatically retried, so confirm its result before sending it again.

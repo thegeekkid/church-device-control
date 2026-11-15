@@ -80,6 +80,8 @@ The disabled setting is saved and synced. Older 0.3.x installations do not under
 
 The shared key protects packets using authenticated AES-GCM encryption. Treat it as a secret: anyone with the key and LAN access can change shared settings. Sync carries device names, rooms, addresses, types, identities, disabled flags, and deletions. It carries neither Kasa credentials nor observed power states, and it never sends power commands on another PC's behalf. Each installation controls devices directly.
 
+Use **Generate key** for a strong random key. Existing keys keep working after an upgrade; you do not need to replace them. Keep PC clocks accurate so timestamped packets pass freshness checks.
+
 Different device edits merge; for conflicting edits to common settings on one device, the newest timestamp wins. Disabled has a separate revision. Keep PC clocks accurate. An offline PC retains its list and catches up when it reconnects. Run one copy per Windows session to avoid listener and saved-file conflicts.
 
 LAN broadcasts generally stay on one subnet. There is no manual cross-subnet peer list. Routed VLANs and isolated Wi-Fi require network configuration.
