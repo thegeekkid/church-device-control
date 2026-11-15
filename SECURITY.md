@@ -4,11 +4,7 @@ Use the latest release for fixes. Older releases are not maintained as separate 
 
 ## Report a vulnerability
 
-Use GitHub's **Security > Advisories > Report a vulnerability** for a private report when enabled:
-
-https://github.com/thegeekkid/church-device-control/security/advisories/new
-
-If that option is unavailable, open an issue containing only a request for a private reporting channel, without exploit details or secrets. Include affected versions, impact, and reproduction steps in the private report. Do not post Kasa passwords, LAN sync keys, or real device inventories publicly.
+To arrange a private report, [open an issue](https://github.com/thegeekkid/church-device-control/issues/new) requesting a private reporting channel. Leave vulnerability details and secrets out of the issue; share affected versions, impact, and reproduction steps privately once a channel is arranged.
 
 ## Local-network trust
 
