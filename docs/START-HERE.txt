@@ -1,0 +1,47 @@
+CHURCH DEVICE CONTROL
+
+Control Roku TVs and compatible Kasa single-outlet smart plugs from Windows
+10/11 (64-bit Intel/AMD). No Python, Go, or separate .NET runtime is needed.
+
+GET STARTED
+1. Connect the PC and devices to the same trusted local network. Guest Wi-Fi
+   isolation may prevent discovery and control.
+2. On Roku TVs, enable Control by mobile apps > Network access and Fast TV
+   Start. Keep the TVs connected to AC power for network wake-up.
+3. For Kasa, save the owning account's email and password in Settings and
+   enable Third-Party Compatibility in the official app if required.
+4. Click Discover devices, or enter an IPv4 address and Add Roku / Add Kasa.
+5. Select a row, set Device name and Room, and click Save device.
+6. Use Selected, Room, or All devices ON/OFF. Group commands ask to confirm.
+
+Green = on; red = off; yellow = unknown/pending/error; gray = disabled.
+Unreachable does not prove a device is off. Kasa state describes its relay.
+The app checks status on launch, about a second after commands, and every
+minute while open. Details (or a double-click) shows full error text.
+
+Disable selected skips that device during regular refresh and every power
+command. Discovery still checks it. Enable it before operating it again.
+
+To sync PCs, generate a LAN sync key in Settings and save the same key on
+each installation. Keep the apps open and allow UDP 45439 on the trusted LAN.
+Kasa credentials stay local; enter them separately on each PC. Keep at least
+one v0.4.1-or-newer copy open during mixed-version upgrades. Old versions
+need updating to honor new behavior such as Disabled.
+
+INSTALL AND UPGRADE
+The standalone Church-TV-Control.exe runs directly. The optional installer
+supports per-user installation without administrator access or all-users
+installation with elevation. Close the app before replacing or upgrading it.
+The taskbar helper shows a shortcut; right-click it and choose Pin to taskbar.
+
+Settings stay in %APPDATA%\ChurchRoku and survive upgrades/uninstall.
+Use only one instance per Windows session. Signed official releases use
+Azure Artifact Signing; Windows may still show SmartScreen warnings.
+
+HELP, SOURCE, AND LICENSES
+https://github.com/thegeekkid/church-device-control
+https://github.com/thegeekkid/church-device-control/blob/main/docs/USER-GUIDE.md
+
+The installer includes LICENSE.txt and THIRD-PARTY-NOTICES.txt. Those files
+also accompany portable releases; retain them when redistributing a copy.
+See THIRD-PARTY-NOTICES.txt for the unresolved Kasa dependency license.

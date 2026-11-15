@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Known dummy LAN sync key, only in protocol and Windows test fixtures"
+condition = "AND"
+paths = ['''(^|/)(sync_test|sync_compat_test|ui_windows_test)\.go$''']
+regexTarget = "secret"
+regexes = ['''^0123456789abcdef0123456789abcdef$''']

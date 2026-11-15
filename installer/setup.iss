@@ -25,6 +25,8 @@ Name: taskbarhelp; Description: "Show the app shortcut after setup so I can pin 
 [Files]
 Source: "..\build\Church-TV-Control.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\build\START-HERE.txt"; DestDir: "{app}"; DestName: "START-HERE.txt"; Flags: ignoreversion
+Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
+Source: "..\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{autodesktop}\Church Device Control"; Filename: "{app}\Church-TV-Control.exe"; Tasks: desktopicon
 Name: "{group}\Church Device Control"; Filename: "{app}\Church-TV-Control.exe"; Tasks: startmenuicon

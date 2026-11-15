@@ -3,3 +3,12 @@
 *.test
 build/
 dist/
+
+# Local device inventories and DPAPI secrets never belong in source control.
+tvs.json
+tvs-*-backup.json
+local-secrets.bin
+.env
+.env.*
+*.pfx
+*.p12
