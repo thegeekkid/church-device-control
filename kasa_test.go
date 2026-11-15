@@ -22,6 +22,7 @@ func TestLegacyKasaPowerAndStatus(t *testing.T) {
 	defer ln.Close()
 	var mu sync.Mutex
 	relay := 1
+	badRelayReply := false
 	go func() {
 		for {
 			c, e := ln.Accept()
@@ -54,7 +55,11 @@ func TestLegacyKasaPowerAndStatus(t *testing.T) {
 					relay = r.State
 					response = map[string]any{"system": map[string]any{"set_relay_state": map[string]int{"err_code": 0}}}
 				} else {
-					response = map[string]any{"system": map[string]any{"get_sysinfo": map[string]any{"alias": "Test plug", "model": "HS103", "deviceId": "test-device", "mac": "11-22-33-44-55-66", "relay_state": relay, "err_code": 0}}}
+					reported := relay
+					if badRelayReply {
+						reported = 2
+					}
+					response = map[string]any{"system": map[string]any{"get_sysinfo": map[string]any{"alias": "Test plug", "model": "HS103", "deviceId": "test-device", "mac": "11-22-33-44-55-66", "relay_state": reported, "err_code": 0}}}
 				}
 				out, _ := json.Marshal(response)
 				key = 171
@@ -89,6 +94,18 @@ func TestLegacyKasaPowerAndStatus(t *testing.T) {
 	tv, e = inspectDevice(tv)
 	if e != nil || tv.Power != "PowerOn" {
 		t.Fatalf("PowerOn after PowerOff: %+v %v", tv, e)
+	}
+	mu.Lock()
+	badRelayReply = true
+	mu.Unlock()
+	if e := devicePower(tv, "PowerOff"); e == nil {
+		t.Fatal("command sent after malformed relay status")
+	}
+	mu.Lock()
+	stillOn := relay == 1
+	mu.Unlock()
+	if !stillOn {
+		t.Fatal("invalid device response triggered a power command")
 	}
 
 }

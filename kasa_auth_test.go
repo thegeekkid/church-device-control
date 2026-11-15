@@ -20,6 +20,14 @@ import (
 )
 
 func TestKasaSetupAccountFallback(t *testing.T) {
+	testKasaAuthenticatedPowerAndStatus(t, false)
+}
+
+func TestModernKasaPowerAndStatus(t *testing.T) {
+	testKasaAuthenticatedPowerAndStatus(t, true)
+}
+
+func testKasaAuthenticatedPowerAndStatus(t *testing.T, modern bool) {
 	userHash := sha1.Sum([]byte("owner@example.org"))
 	passHash := sha1.Sum([]byte("kasaSetup"))
 	auth := sha256.Sum256(append(userHash[:], passHash[:]...))
@@ -84,6 +92,10 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 			cipher.NewCBCDecrypter(block, iv).CryptBlocks(command, body[32:])
 			command = command[:len(command)-int(command[len(command)-1])]
 			var req struct {
+				Method string
+				Params struct {
+					On bool `json:"device_on"`
+				}
 				System struct {
 					Set *struct{ State int } `json:"set_relay_state"`
 				}
@@ -97,6 +109,22 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 			if req.System.Set != nil {
 				relay = req.System.Set.State
 				plain = []byte(`{"system":{"set_relay_state":{"err_code":0}}}`)
+			}
+			if modern {
+				switch req.Method {
+				case "get_device_info":
+					plain = []byte(fmt.Sprintf(`{"error_code":0,"result":{"nickname":"VGVzdCBNb2Rlcm4gUGx1Zw==","model":"P110M","device_id":"modern-test","device_on":%t}}`, relay == 1))
+				case "component_nego":
+					plain = []byte(`{"error_code":0,"result":{"component_list":[]}}`)
+				case "set_device_info":
+					relay = 0
+					if req.Params.On {
+						relay = 1
+					}
+					plain = []byte(`{"error_code":0}`)
+				default:
+					plain = []byte(`{"error_code":-1008,"msg":"legacy API unsupported"}`)
+				}
 			}
 			pad := 16 - len(plain)%16
 			plain = append(plain, bytes.Repeat([]byte{byte(pad)}, pad)...)
@@ -124,7 +152,11 @@ func TestKasaSetupAccountFallback(t *testing.T) {
 	secrets.Unlock()
 	defer func() { secrets.Lock(); secrets.User = previous; secrets.Unlock() }()
 	tv, e := inspectKasa("127.0.0.1")
-	if e != nil || tv.Power != "PowerOn" || tv.Model != "HS103" {
+	model := "HS103"
+	if modern {
+		model = "P110M"
+	}
+	if e != nil || tv.Power != "PowerOn" || tv.Model != model {
 		t.Fatalf("%+v %v", tv, e)
 	}
 	mu.Lock()

@@ -4,7 +4,7 @@ on:
     inputs:
       release_tag:
         description: Version tag (update resource metadata and release notes for a new version)
-        default: v0.4.2
+        default: v0.4.3
         required: true
         type: string
       sign:
@@ -52,9 +52,13 @@ jobs:
         with:
           go-version: '1.27.3'
           cache: false
-      - name: Test actual Windows controls, resources and Roku protocol
+      - name: Verify dependencies and test Windows app
         shell: pwsh
         run: |
+          go mod download
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go mod verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test -v ./...
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go vet ./...

@@ -29,3 +29,13 @@ accumulate. Do not use the bridge priority as a permanent logical revision.
 
 Old applications cannot honor behavior they did not implement. Compatible
 settings exchange does not make Disabled work on pre-0.4 installations.
+
+Packet freshness (v0.4.3): outgoing packets include optional SentAt (Unix
+nanoseconds) inside the authenticated JSON. It is not a device revision and
+is never stored in local snapshots. Updated receivers accept it within five
+minutes of their clock; zero/absent remains compatible with old senders.
+The LAN receive loop suppresses exact duplicate authenticated datagrams before
+merge or reply using a bounded 4096-entry, ten-minute in-memory cache. The
+cache resets on restart and may evict entries at capacity. Old unstamped
+captures cannot be given complete expiry without breaking their wire format.
+AES-GCM, key derivation, AAD, port, and v0.4.0 bridge behavior remain unchanged.

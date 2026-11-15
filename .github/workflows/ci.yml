@@ -27,9 +27,13 @@ jobs:
         with:
           go-version: '1.27.3'
           cache: false
-      - name: Test and vet
+      - name: Verify dependencies, test and vet
         shell: pwsh
         run: |
+          go mod download
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go mod verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test -v ./...
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go vet ./...

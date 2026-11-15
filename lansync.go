@@ -22,6 +22,9 @@ type sharedConfig struct {
 	Devices      []TV
 	Deleted      map[string]int64
 	Request      bool
+	// Optional authenticated send time; old readers ignore it. Local snapshots
+	// omit it, so it never changes device revisions or saved settings.
+	SentAt int64 `json:",omitempty"`
 }
 
 func deviceID(t TV) string {
@@ -48,13 +51,27 @@ func configSnapshotLocked(wire bool) sharedConfig {
 	}
 	return c
 }
-func sealConfig(c sharedConfig, key string) ([]byte, error) {
+func syncCipher(key string) (cipher.AEAD, error) {
 	if len(key) < 24 {
 		return nil, fmt.Errorf("sync key must contain at least 24 characters")
 	}
+	// This derivation is the deployed v0.3/v0.4 wire contract. Generate key
+	// supplies random bytes, not a human password; changing the derivation here
+	// would disconnect existing peers. AES-GCM below authenticates each packet.
+	// This is not password stretching: manually chosen weak phrases remain
+	// guessable. Prefer the CSPRNG-based Settings generator (sync_security.go).
 	hash := sha256.Sum256([]byte(key))
-	block, _ := aes.NewCipher(hash[:])
-	g, _ := cipher.NewGCM(block)
+	block, e := aes.NewCipher(hash[:])
+	if e != nil {
+		return nil, e
+	}
+	return cipher.NewGCM(block)
+}
+func sealConfig(c sharedConfig, key string) ([]byte, error) {
+	g, e := syncCipher(key)
+	if e != nil {
+		return nil, e
+	}
 	nonce := make([]byte, g.NonceSize())
 	if _, e := rand.Read(nonce); e != nil {
 		return nil, e
@@ -63,7 +80,7 @@ func sealConfig(c sharedConfig, key string) ([]byte, error) {
 	if e != nil {
 		return nil, e
 	}
-	if len(b) > 55000 {
+	if len(b) > maxSyncPlaintext {
 		return nil, fmt.Errorf("settings exceed LAN packet limit")
 	}
 	return g.Seal(nonce, nonce, b, []byte("church-device-sync-v1")), nil
@@ -73,12 +90,16 @@ func openConfig(b []byte, key string) (sharedConfig, error) {
 	if len(key) < 24 {
 		return c, fmt.Errorf("sync disabled")
 	}
-	hash := sha256.Sum256([]byte(key))
-	block, _ := aes.NewCipher(hash[:])
-	g, _ := cipher.NewGCM(block)
-	if len(b) < g.NonceSize() {
+	g, e := syncCipher(key)
+	if e != nil {
+		return c, e
+	}
+	if len(b) < g.NonceSize()+g.Overhead() || len(b) > maxSyncPlaintext+g.NonceSize()+g.Overhead() {
 		return c, fmt.Errorf("invalid packet")
 	}
+	// Open verifies the GCM authentication tag before parsing or trusting JSON.
+	// Only holders of the shared key can create a valid packet. This is group
+	// authentication, not individual-PC authorization or replay protection.
 	plain, e := g.Open(nil, b[:g.NonceSize()], b[g.NonceSize():], []byte("church-device-sync-v1"))
 	if e != nil {
 		return c, e
@@ -89,20 +110,21 @@ func openConfig(b []byte, key string) (sharedConfig, error) {
 	if e := normalizeV04Bridge(&c); e != nil {
 		return c, e
 	}
-	if (c.Version != 1 && c.Version != 2) || len(c.Devices) > 500 || len(c.Deleted) > 2000 {
-		return c, fmt.Errorf("unsupported settings")
+	now := time.Now()
+	if c.SentAt != 0 && (c.SentAt < now.Add(-syncClockWindow).UnixNano() || c.SentAt > now.Add(syncClockWindow).UnixNano()) {
+		return c, fmt.Errorf("expired sync packet; check PC clocks")
 	}
-	for _, t := range c.Devices {
-		if t.DisabledUpdated > time.Now().Add(5*time.Minute).UnixNano() {
-			return c, fmt.Errorf("invalid feature timestamp")
-		}
-		if !validIP(t.IP) || (t.Kind != "" && t.Kind != "roku" && t.Kind != "kasa") || len(t.Name) > 200 || len(t.Room) > 200 || t.Updated > time.Now().Add(5*time.Minute).UnixNano() {
-			return c, fmt.Errorf("invalid device settings")
-		}
+	if e := validateSharedConfig(c, now); e != nil {
+		return c, e
 	}
 	return c, nil
 }
 func mergeConfig(c sharedConfig) bool {
+	// openConfig checks wire input first. Repeat settings validation here so a
+	// direct caller cannot bypass the trust boundary or partially merge bad data.
+	if validateSharedConfig(c, time.Now()) != nil {
+		return false
+	}
 	state.Lock()
 	defer state.Unlock()
 	if state.Deleted == nil {
@@ -219,6 +241,7 @@ func syncPacketVersion(request bool, version int) ([]byte, error) {
 	c.Version = version
 	c.Capabilities = []string{"disabled-v1", "unknown-fields-v1"}
 	c.Request = request
+	c.SentAt = time.Now().UnixNano()
 	for i := range c.Devices {
 		c.Devices[i].DisabledUpdated = disabledRevision(c.Devices[i])
 	}
@@ -241,12 +264,15 @@ func startLAN() {
 	lanConn = c
 	go func() {
 		buf := make([]byte, 60000)
+		var receiver syncReceiver
 		for {
 			n, addr, e := c.ReadFromUDP(buf)
 			if e != nil {
 				return
 			}
-			cfg, e := openConfig(buf[:n], syncKey())
+			// The receiver authenticates/validates, then suppresses duplicate
+			// datagrams before merging or replying to a request.
+			cfg, e := receiver.open(buf[:n], syncKey())
 			if e != nil {
 				continue
 			}

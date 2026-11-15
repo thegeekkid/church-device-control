@@ -2,6 +2,15 @@
 
 Download binaries and GitHub-generated source archives from [Releases](https://github.com/thegeekkid/church-device-control/releases). Historical release notes are retained as written; current setup instructions are in the [user guide](docs/USER-GUIDE.md).
 
+## v0.4.3
+
+- Validate device replies and shared settings before using them; reject malformed relay states and revisions.
+- Suppress duplicate sync datagrams and expire timestamped packets while retaining legacy sync compatibility.
+- Generate 256-bit sync keys and report saved-credential loading failures. Existing keys and saved devices keep working.
+- Clear temporary credential buffers and document security checks beside their callers.
+
+[Full notes](docs/release-v0.4.3.txt)
+
 ## v0.4.2
 
 - License original project code and artwork under MIT; include third-party notices.

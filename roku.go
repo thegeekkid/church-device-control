@@ -45,6 +45,9 @@ type deviceInfo struct {
 
 var client = &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
+// Roku ECP uses local HTTP by device design. Requests use validated numeric
+// IPv4 addresses, fixed ports/paths, no proxy or redirects, and bounded replies.
+
 func validIP(s string) bool {
 	ip := net.ParseIP(s)
 	return ip != nil && ip.To4() != nil && !ip.IsMulticast() && !ip.IsUnspecified() && !ip.Equal(net.IPv4bcast)
@@ -77,7 +80,11 @@ func inspectRokuContext(ctx context.Context, ip string) (TV, error) {
 	if name == "" {
 		name = d.Model
 	}
-	return TV{IP: ip, Name: name, Model: d.Model, Serial: d.Serial, Power: d.Power, Status: "Reachable", MAC: rokuMAC(d)}, nil
+	tv := TV{IP: ip, Name: name, Model: d.Model, Serial: d.Serial, Power: d.Power, Status: "Reachable", MAC: rokuMAC(d)}
+	if e := validateDeviceMetadata(tv); e != nil {
+		return TV{}, e
+	}
+	return tv, nil
 }
 func power(ip, cmd string) error {
 	if !validIP(ip) || (cmd != "PowerOn" && cmd != "PowerOff") {
@@ -225,6 +232,11 @@ func load() {
 	state.Dirty = true
 }
 func upsert(t TV) {
+	// Discovery metadata is untrusted too, including a Kasa discovery record
+	// saved after an unsuccessful status query. Do not bypass response limits.
+	if !validIP(t.IP) || (t.Kind != "" && t.Kind != "roku" && t.Kind != "kasa") || validateDeviceMetadata(t) != nil {
+		return
+	}
 	state.Lock()
 	defer state.Unlock()
 	if state.Deleted[deviceID(t)] > 0 && t.Updated <= state.Deleted[deviceID(t)] {

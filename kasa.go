@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+// Fixed budgets bound offline-device waits; all network calls also inherit the
+// caller's cancellation context. Transport framing/authentication lives in tapo.
 const kasaOperationTimeout = 12 * time.Second
 const kasaRequestTimeout = 2500 * time.Millisecond
 
@@ -45,24 +47,16 @@ func inspectKasaContext(parent context.Context, ip string) (TV, error) {
 	if e != nil {
 		return TV{}, e
 	}
-	if e == nil {
-		var r struct {
-			System struct {
-				Info struct {
-					Alias, Model, DeviceID, MAC string
-					Relay                       *int `json:"relay_state"`
-					Code                        int  `json:"err_code"`
-				} `json:"get_sysinfo"`
-			}
+	d, e := legacyKasaInfo(raw)
+	if e != nil {
+		return TV{}, e
+	}
+	if d != nil {
+		p := "PowerOff"
+		if *d.Relay == 1 {
+			p = "PowerOn"
 		}
-		if decodeKasa(raw, &r) == nil && r.System.Info.Relay != nil && r.System.Info.Code == 0 {
-			d := r.System.Info
-			p := "PowerOff"
-			if *d.Relay != 0 {
-				p = "PowerOn"
-			}
-			return TV{IP: ip, Name: d.Alias, Model: d.Model, Serial: d.DeviceID, MAC: normalizeMAC(d.MAC), Kind: "kasa", Power: p, Status: "Reachable"}, nil
-		}
+		return TV{IP: ip, Name: d.Alias, Model: d.Model, Serial: d.DeviceID, MAC: normalizeMAC(d.MAC), Kind: "kasa", Power: p, Status: "Reachable"}, nil
 	}
 	info, e := c.Info(ctx)
 	if e != nil {
@@ -79,7 +73,11 @@ func inspectKasaContext(parent context.Context, ip string) (TV, error) {
 	if outlets[0].On {
 		p = "PowerOn"
 	}
-	return TV{IP: ip, Name: info.Alias, Model: info.Model, Serial: info.DeviceID, MAC: normalizeMAC(info.MAC), Kind: "kasa", Power: p, Status: "Reachable"}, nil
+	tv := TV{IP: ip, Name: info.Alias, Model: info.Model, Serial: info.DeviceID, MAC: normalizeMAC(info.MAC), Kind: "kasa", Power: p, Status: "Reachable"}
+	if e := validateDeviceMetadata(tv); e != nil {
+		return TV{}, e
+	}
+	return tv, nil
 }
 func devicePower(t TV, cmd string) error {
 	if deviceDisabled(t) {
@@ -97,28 +95,23 @@ func devicePower(t TV, cmd string) error {
 	if e != nil {
 		return e
 	}
-	if e == nil {
-		var r struct {
-			System struct {
-				Info struct {
-					Relay *int `json:"relay_state"`
-				} `json:"get_sysinfo"`
-			}
+	d, e := legacyKasaInfo(raw)
+	if e != nil {
+		return e
+	}
+	if d != nil {
+		v := 0
+		if cmd == "PowerOn" {
+			v = 1
 		}
-		if decodeKasa(raw, &r) == nil && r.System.Info.Relay != nil {
-			v := 0
-			if cmd == "PowerOn" {
-				v = 1
-			}
-			response, e := c.Query(ctx, map[string]any{"system": map[string]any{"set_relay_state": map[string]int{"state": v}}})
-			if e != nil {
-				return e
-			}
-			if e := relayCommandResult(response); e != nil {
-				return fmt.Errorf("Kasa %s: %w", cmd, e)
-			}
-			return nil
+		response, e := c.Query(ctx, map[string]any{"system": map[string]any{"set_relay_state": map[string]int{"state": v}}})
+		if e != nil {
+			return e
 		}
+		if e := relayCommandResult(response); e != nil {
+			return fmt.Errorf("Kasa %s: %w", cmd, e)
+		}
+		return nil
 	}
 	outlets, e := c.Outlets(ctx)
 	if e != nil {
@@ -167,7 +160,9 @@ func decodeKasa(v any, out any) error {
 	return json.Unmarshal(b, out)
 }
 
-// Older Kasa plugs advertise on UDP 9999 rather than UDP 20002.
+// Older Kasa plugs advertise on UDP 9999 rather than UDP 20002. The fixed XOR
+// is the device's discovery protocol, not transport security. The request
+// contains no account credentials; inspectKasa validates replies afterward.
 func legacyKasaIPs() []string {
 	c, e := net.ListenUDP("udp4", &net.UDPAddr{})
 	if e != nil {
@@ -209,6 +204,8 @@ func legacyKasaIPs() []string {
 
 // Account credentials remain the first choice. Newer Kasa IOT firmware may
 // instead use the account e-mail + kasaSetup for the local KLAP handshake.
+// This selects firmware-compatible credentials, not an authentication bypass:
+// tapo still verifies the device's credential-derived handshake and signatures.
 // Reference: python-kasa/python-kasa#1840. This never changes cloud credentials.
 var setupKasaClient = func(ip, user string) (*tapo.Strip, error) {
 	return tapo.New(ip, tapo.WithCredentials(user, "kasaSetup"), tapo.WithTimeout(kasaRequestTimeout), tapo.WithDisableLegacy())
