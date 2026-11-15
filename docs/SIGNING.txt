@@ -10,7 +10,7 @@ Use an Entra app registration/service principal for this repository. Add a
 federated credential for GitHub Actions:
   Issuer: https://token.actions.githubusercontent.com
   Subject (GitHub immutable subject format):
-    repo:thegeekkid@8616594/roku-tv-control@1449827212:ref:refs/heads/main
+    repo:thegeekkid@8616594/church-device-control@1449827212:ref:refs/heads/main
   Audience: api://AzureADTokenExchange
 Grant this identity the "Artifact Signing Certificate Profile Signer" role
 (previously "Trusted Signing Certificate Profile Signer") scoped to the
@@ -43,3 +43,9 @@ SmartScreen reputation or the absence of download warnings.
 REFERENCES
 https://github.com/Azure/artifact-signing-action
 https://learn.microsoft.com/en-us/azure/artifact-signing/how-to-signing-integrations
+
+REPOSITORY RENAME
+The repository is now thegeekkid/church-device-control. Its numeric owner and
+repository IDs remain 8616594 and 1449827212. Azure's current subject match also
+includes the repository name, so update the federated credential subject above
+when renaming the repository. Issuer and audience stay unchanged.
