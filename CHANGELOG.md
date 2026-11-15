@@ -2,12 +2,14 @@
 
 Download binaries and GitHub-generated source archives from [Releases](https://github.com/thegeekkid/church-device-control/releases). Historical release notes are retained as written; current setup instructions are in the [user guide](docs/USER-GUIDE.md).
 
-## Unreleased
+## v0.4.2
 
 - License original project code and artwork under MIT; include third-party notices.
 - Replace the old README with an introduction and a documentation index. Add current user, troubleshooting, development, signing, contribution, and security guides.
 - Remove the extra app-and-source ZIP; include license notices with downloads.
 - Add read-only contributor CI and restrict manual release builds to this repository's `main`.
+
+[Full notes](docs/release-v0.4.2.txt)
 
 ## v0.4.1
 

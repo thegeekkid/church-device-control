@@ -4,7 +4,7 @@ on:
     inputs:
       release_tag:
         description: Version tag (update resource metadata and release notes for a new version)
-        default: v0.4.1
+        default: v0.4.2
         required: true
         type: string
       sign:

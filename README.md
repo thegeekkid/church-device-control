@@ -4,6 +4,8 @@ A small Windows app for turning Roku TVs and Kasa smart plugs on and off across 
 
 Built for church volunteers who need a few clear controls before and after a service. It also works anywhere you have compatible devices on a trusted LAN.
 
+![Church Device Control showing Roku TVs and Kasa plugs organized by room, including a disabled device.](docs/Screenshot%202026-11-15%20093601.png)
+
 ## Download
 
 **[Get the latest release](https://github.com/thegeekkid/church-device-control/releases/latest)** for Windows 10 or 11, 64-bit Intel/AMD:

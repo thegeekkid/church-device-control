@@ -1,0 +1,5 @@
+Church Device Control v0.4.2
+
+Updated README and documentation with setup guides and an application screenshot. Include the MIT license and third-party notices with downloads and installed copies.
+
+Download the signed installer or standalone executable. The extra app-and-source ZIP has been removed.
