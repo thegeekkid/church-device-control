@@ -16,7 +16,7 @@
       "0409": {
         "identity": {
           "name": "thegeekkid.ChurchTVControl",
-          "version": "0.4.3.0"
+          "version": "0.4.4.0"
         },
         "description": "Church Device Control",
         "minimum-os": "win10",
@@ -40,15 +40,15 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "0.4.3.0",
-          "product_version": "0.4.3.0"
+          "file_version": "0.4.4.0",
+          "product_version": "0.4.4.0"
         },
         "info": {
           "0409": {
             "FileDescription": "Church Device Control",
             "ProductName": "Church Device Control",
-            "FileVersion": "0.4.3",
-            "ProductVersion": "0.4.3",
+            "FileVersion": "0.4.4",
+            "ProductVersion": "0.4.4",
             "OriginalFilename": "Church-TV-Control.exe"
           }
         }

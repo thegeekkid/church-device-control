@@ -320,7 +320,7 @@ func refreshTVs(tvs []TV) string {
 			ctx, cancel := context.WithTimeout(context.Background(), kasaOperationTimeout)
 			defer cancel()
 			fresh, e := inspectDeviceContext(ctx, t)
-			if e != nil && t.Kind == "kasa" && !deviceDisabled(t) {
+			if e != nil && t.Kind == "kasa" && !isKasaAuthenticationError(e) && !deviceDisabled(t) {
 				timer := time.NewTimer(time.Second)
 				select {
 				case <-timer.C:

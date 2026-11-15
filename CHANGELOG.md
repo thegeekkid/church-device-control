@@ -2,6 +2,14 @@
 
 Download binaries and GitHub-generated source archives from [Releases](https://github.com/thegeekkid/church-device-control/releases). Historical release notes are retained as written; current setup instructions are in the [user guide](docs/USER-GUIDE.md).
 
+## v0.4.4
+
+- Back off repeated Kasa authentication failures; credential changes and explicit discovery allow an immediate retry.
+- Distinguish complete, partial, and failed LAN sync broadcasts, with full errors in Details.
+- Embed and verify the source commit in official executables. Details shows the version and commit, including when no device is selected.
+
+[Full notes](docs/release-v0.4.4.txt)
+
 ## v0.4.3
 
 - Validate device replies and shared settings before using them; reject malformed relay states and revisions.

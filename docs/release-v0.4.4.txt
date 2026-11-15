@@ -1,0 +1,7 @@
+Church Device Control v0.4.4
+
+Repeated Kasa authentication failures now back off from 30 seconds to a maximum of five minutes. Changing credentials or clicking Discover devices retries immediately. Successful sessions and transient network-error recovery keep their existing behavior.
+
+LAN sync reports complete, partial, and failed broadcasts. Open Details for full destination errors, the last sync result, and the application version/source commit. Details also works without a selected device.
+
+Official executables record their source commit, verified during the release build. Existing devices, settings, and sync keys are preserved.

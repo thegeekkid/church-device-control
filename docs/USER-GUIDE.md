@@ -60,7 +60,7 @@ Use **Selected ON/OFF**, **Room ON/OFF**, or **All devices ON/OFF**. For a room 
 
 An accepted command means the device accepted the request. The app waits about one second and checks status to confirm what the device reports. Status is also checked on launch and once a minute while open. **Refresh status** starts a check immediately. Device requests run in the background with up to four status checks in parallel; a Kasa check, including its retry, has a total 12-second limit.
 
-For full error text, select a device and click **Details**, or double-click its row. Press **Ctrl+C** in the dialog to copy its contents.
+For full error text, select a device and click **Details**, or double-click its row. The dialog also shows the application version, source commit, and last LAN sync result. **Details** works without a selected device to show application and sync information. Press **Ctrl+C** in the dialog to copy its contents.
 
 ## Disable occasional devices
 

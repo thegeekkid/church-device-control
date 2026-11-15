@@ -29,6 +29,8 @@ The app authenticates locally with the device; it does not use a cloud OAuth sig
 
 Authenticated sessions are reused, and a temporary status failure gets one retry. Changing credentials causes fresh authentication. A failed power command is not automatically retried, so confirm its result before sending it again.
 
+Repeated authentication failures pause further attempts for 30 seconds, increasing to a maximum of five minutes. Changing credentials or clicking **Discover devices** retries immediately. Offline/network errors do not start an authentication cooldown.
+
 ## Offline plugs make checks take longer
 
 Use **Disable selected** for occasional devices. Disabled devices skip regular refreshes and all power commands; discovery still checks them. Up to four enabled devices are checked concurrently. Each Kasa status check has a total 12-second budget including its retry; several batches can take longer overall.
@@ -36,6 +38,8 @@ Use **Disable selected** for occasional devices. Disabled devices skip regular r
 If the error text is cut off, click **Details** or double-click the row. **Ctrl+C** copies the full dialog.
 
 ## Settings do not sync
+
+If the status says **LAN sync partially sent**, some broadcast writes failed. Click **Details** to see the failed destinations and errors. Successful writes do not confirm that another PC received the settings; check for a received-settings message on that PC.
 
 - Keep the apps open, use the same sync key, and click **Sync + refresh** on each PC.
 - Allow UDP 45439 on the trusted Private network. Broadcasts generally do not cross subnets, VLAN boundaries, or isolated Wi-Fi.

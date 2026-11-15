@@ -17,9 +17,13 @@ const kasaOperationTimeout = 12 * time.Second
 const kasaRequestTimeout = 2500 * time.Millisecond
 
 func kasaClient(ip string) (*tapo.Strip, error) {
+	// validIP is in roku.go: numeric IPv4 endpoints only. Contacting internal
+	// devices is this app's purpose; transport paths/ports are fixed by tapo.
 	if !validIP(ip) {
 		return nil, fmt.Errorf("Enter a valid IPv4 address")
 	}
+	// settings.go loads/saves this runtime credential cache with Windows DPAPI
+	// (secrets_windows.go). The mutex is for concurrency, not disk encryption.
 	secrets.Lock()
 	u, p := secrets.User, secrets.Password
 	secrets.Unlock()
@@ -123,6 +127,7 @@ func devicePower(t TV, cmd string) error {
 	return c.SetOutlet(ctx, outlets[0].ID, cmd == "PowerOn")
 }
 func discoverKasa() string {
+	retryFailedKasaAuthentication()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	ds, e := tapo.Discover(ctx, 3*time.Second)
@@ -247,7 +252,9 @@ func negotiateKasa(ctx context.Context, ip string) (*tapo.Strip, tapo.RawRespons
 			return nil, nil, fmt.Errorf("Kasa setup-mode connection/protocol error: %w", ce)
 		}
 	}
-	return nil, nil, fmt.Errorf("Kasa KLAP authentication mismatch after account and setup modes; model/firmware or device account binding may be incompatible")
+	// Preserve the typed cause so probeKasa can back off authentication only,
+	// while transport errors continue using the existing transient retry path.
+	return nil, nil, fmt.Errorf("Kasa KLAP authentication mismatch after account and setup modes; model/firmware or device account binding may be incompatible: %w", e)
 }
 
 func relayCommandResult(response any) error {

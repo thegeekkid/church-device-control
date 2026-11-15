@@ -4,7 +4,7 @@ on:
     inputs:
       release_tag:
         description: Version tag (update resource metadata and release notes for a new version)
-        default: v0.4.3
+        default: v0.4.4
         required: true
         type: string
       sign:
@@ -30,7 +30,7 @@ jobs:
       contents: write
       id-token: write
     env:
-      GOFLAGS: -buildvcs=false
+      GOFLAGS: -buildvcs=true
       RELEASE_TAG: ${{ inputs.release_tag }}
       SIGN_BUILD: ${{ inputs.sign }}
       PUBLISH_RELEASE: ${{ inputs.publish_release }}
@@ -70,8 +70,14 @@ jobs:
           GOARCH: amd64
         run: |
           New-Item -ItemType Directory -Force build | Out-Null
-          go build -trimpath -ldflags='-s -w -H=windowsgui' -o build/Church-TV-Control.exe .
+          go build -trimpath -ldflags="-s -w -H=windowsgui -X main.appVersion=$env:RELEASE_TAG" -o build/Church-TV-Control.exe .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $metadata = go version -m build/Church-TV-Control.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $buildInfo = $metadata -join "`n"
+          if (-not $buildInfo.Contains("vcs.revision=$env:GITHUB_SHA")) { throw 'Executable does not record the expected source commit' }
+          if (-not $buildInfo.Contains('vcs.modified=false')) { throw 'Executable was built from modified source' }
+          Write-Host $buildInfo
       - name: Validate Azure signing configuration
         if: inputs.sign
         shell: pwsh

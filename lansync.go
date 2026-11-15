@@ -279,7 +279,11 @@ func startLAN() {
 			mergeConfig(cfg)
 			if cfg.Request {
 				if b, e := syncPacketVersion(false, cfg.Version); e == nil {
-					c.WriteToUDP(b, addr)
+					if e := writeSyncPacket(c.WriteToUDP, b, addr); e != nil {
+						syncStatus(fmt.Sprintf("LAN sync reply to %s failed: %v", addr, e))
+					}
+				} else {
+					syncStatus("LAN sync reply could not be prepared: " + e.Error())
 				}
 			}
 		}
@@ -317,18 +321,7 @@ func syncNow() string {
 			destinations[broadcast.String()] = true
 		}
 	}
-	sent := false
-	for ip := range destinations {
-		for _, b := range packets {
-			if _, e := lanConn.WriteToUDP(b, &net.UDPAddr{IP: net.ParseIP(ip), Port: syncPort}); e == nil {
-				sent = true
-			}
-		}
-	}
-	if !sent {
-		return "LAN sync broadcast failed; check the network and firewall."
-	}
-	return "LAN sync sent at " + time.Now().Format("15:04:05")
+	return broadcastSyncPackets(packets, destinations, lanConn.WriteToUDP)
 }
 func periodicWork() string { s := syncNow(); syncStatus(s); return refresh() }
 func roomTargets(room string) []TV {
