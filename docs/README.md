@@ -2,6 +2,8 @@
 
 Church Device Control brings Roku TVs and compatible Kasa smart plugs into one Windows window. Discover devices on your local network, give each one a recognizable name, and put related devices in a room so volunteers can turn that room on or off together.
 
+![Church Device Control showing Roku TVs and Kasa plugs organized by room, including a disabled device.](Screenshot%202026-11-15%20093601.png)
+
 You can use a single PC or keep several installations in sync without a server. The app checks status while it is open; closing it stops refreshes and settings sync. Disabled devices remain in the list for occasional use and are excluded from regular checks and power commands.
 
 Start with the user guide. Go and the build tools are only needed if you want to change the software.
