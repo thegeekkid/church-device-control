@@ -1,0 +1,31 @@
+SETTINGS SYNC COMPATIBILITY CONTRACT
+
+UDP 45439, authenticated AES-GCM, existing key derivation and AAD remain stable.
+Version 1 is the additive wire envelope; advertise optional features through
+Capabilities rather than incrementing Version for a new field. Send a v2 bridge
+view for the already-released v0.4.0 reader. Local storage can remain version 2.
+Replies use the requester's envelope version. No secrets or power commands sync.
+
+TV JSON round-trips unknown device fields. Discovery preserves them. A legacy
+edit that omits them must not erase locally known settings. Explicit JSON null
+can represent a future field's intentional clearing. New global settings need
+equivalent preservation before introduction; do not assume this device-field
+mechanism covers new top-level collections.
+
+Disabled is capability-gated and independently revisioned. Future features must
+use equivalent independent revisions/presence semantics, and be excluded from
+common-field equality when appropriate. Absent features mean unsupported, not
+reset-to-default. Readers must ignore unsupported optional features rather than
+rejecting the whole compatible packet. New device kinds require a legacy-view
+filter/negotiation because old readers reject unknown Kind values; adding one
+unfiltered to the legacy broadcast would break their common-settings sync.
+
+Frozen v0.3.0 and v0.4.0 receiver fixtures are in sync_compat_test.go. Extend them
+for every wire-facing feature; retain old wire/encryption behavior. The v0.4.0
+bridge uses a transport-only one-nanosecond record priority so its whole-record
+merge accepts the feature view regardless of packet order. Updated readers
+normalize that priority, and ignore unchanged legacy echoes so it cannot
+accumulate. Do not use the bridge priority as a permanent logical revision.
+
+Old applications cannot honor behavior they did not implement. Compatible
+settings exchange does not make Disabled work on pre-0.4 installations.

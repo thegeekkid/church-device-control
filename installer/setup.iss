@@ -1,4 +1,4 @@
-#define AppVersion "0.4.0"
+#define AppVersion "0.4.1"
 [Setup]
 AppId={{507DE0A3-7082-4830-A477-DC1A5325DC31}
 AppName=Church Device Control

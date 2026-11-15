@@ -94,8 +94,21 @@ Disabling is available while a refresh is running; an already in-flight request
 may finish. Enabling initiates a check if the app is idle; otherwise use Refresh
 status when the current operation finishes or wait for the next periodic check.
 The disabled flag is saved per device and shared with other new-version peers.
-UPDATE EVERY INSTALLATION: older applications cannot honor disabled devices and
-do not receive version-2 sync packets. Incoming older-peer edits cannot re-enable
-a disabled device on the new version. Avoid running older software afterward.
+0.4.0 required matching sync formats. Upgrade at least one copy to 0.4.1 to
+restore communication with older peers; once each communicating pair has a
+compatible reader, you can upgrade gradually. 0.4.1 exchanges common settings
+with 0.3.x and bridges 0.4.0. If a 0.4.0 PC and a 0.3.x PC communicate directly
+without a 0.4.1 peer online, the original one-way format limitation still applies.
+Older 0.3.x software cannot honor Disabled: it may still refresh/control a device
+marked disabled elsewhere. Upgrade a PC before relying on Disabled there.
+Newer settings are preserved when an older peer edits a common setting.
 Requests use slightly shorter timeouts. Up to four devices refresh concurrently.
 Each Kasa status check, including its retry, has a total 12-second limit.
+
+0.4.1 — COMPATIBLE SETTINGS SYNC
+The stable v1 envelope supports optional capabilities and additive device fields.
+Common settings work in mixed-version installations. New versions retain unknown
+optional device settings through save/load, discovery and sync; older copies
+ignore features they do not implement. Disabled has its own change timestamp so
+an unrelated room/name edit does not erase it. A compatibility v2 view bridges
+v0.4.0 as well. Account credentials and observed power state still never sync.

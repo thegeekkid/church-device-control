@@ -1,0 +1,9 @@
+Church Device Control v0.4.1
+
+Restore mixed-version settings sync: the stable version-1 envelope carries optional capabilities and additive settings, with a compatibility view for v0.4.0's version-2 reader. Names, rooms, addresses and deletions can be exchanged with older 0.3.x installations during staged upgrades. A 0.4.0/0.3.x pair still needs a 0.4.1 peer online or one member upgraded to bridge their original format mismatch.
+
+Preserve unknown optional device fields across load/save, discovery and sync, including when a legacy peer strips them from an edit. Disabled has an independent revision so common-field edits cannot silently clear it. Compatibility tests exercise frozen v0.3 and v0.4 readers, both packet delivery orders, repeated legacy echoes, stale feature changes and future unknown fields.
+
+Older software cannot implement new behavior: v0.3.x copies still do not understand Disabled and may refresh/control those devices until upgraded. This update keeps common settings compatible; it does not retrofit the old application's control rules.
+
+Both application and installer are signed. Devices, room assignments, credentials and settings are preserved. Same sync key and LAN/firewall requirements as before.

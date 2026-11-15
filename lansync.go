@@ -17,10 +17,11 @@ const syncPort = 45439
 
 // Settings only: no power state, commands or account credentials cross the LAN.
 type sharedConfig struct {
-	Version int
-	Devices []TV
-	Deleted map[string]int64
-	Request bool
+	Version      int
+	Capabilities []string `json:",omitempty"`
+	Devices      []TV
+	Deleted      map[string]int64
+	Request      bool
 }
 
 func deviceID(t TV) string {
@@ -85,10 +86,16 @@ func openConfig(b []byte, key string) (sharedConfig, error) {
 	if e = json.Unmarshal(plain, &c); e != nil {
 		return c, e
 	}
+	if e := normalizeV04Bridge(&c); e != nil {
+		return c, e
+	}
 	if (c.Version != 1 && c.Version != 2) || len(c.Devices) > 500 || len(c.Deleted) > 2000 {
 		return c, fmt.Errorf("unsupported settings")
 	}
 	for _, t := range c.Devices {
+		if t.DisabledUpdated > time.Now().Add(5*time.Minute).UnixNano() {
+			return c, fmt.Errorf("invalid feature timestamp")
+		}
 		if !validIP(t.IP) || (t.Kind != "" && t.Kind != "roku" && t.Kind != "kasa") || len(t.Name) > 200 || len(t.Room) > 200 || t.Updated > time.Now().Add(5*time.Minute).UnixNano() {
 			return c, fmt.Errorf("invalid device settings")
 		}
@@ -127,21 +134,46 @@ func mergeConfig(c sharedConfig) bool {
 			r.Status = ""
 			lb, _ := json.Marshal(l)
 			rb, _ := json.Marshal(r)
-			if remote.Updated > local.Updated || (remote.Updated == local.Updated && string(rb) > string(lb)) {
-				if remote.MAC == "" {
-					remote.MAC = local.MAC
+			remoteWins := remote.Updated > local.Updated || (remote.Updated == local.Updated && string(rb) > string(lb))
+			next := local
+			if remoteWins {
+				next = remote
+				if next.MAC == "" {
+					next.MAC = local.MAC
 				}
-				if c.Version < 2 {
-					remote.Disabled = local.Disabled
+				next.Power = local.Power
+				next.Status = local.Status
+			}
+			next.Extras = mergeExtras(local.Extras, remote.Extras, remoteWins)
+			if remoteWins && len(c.Capabilities) == 0 && sameCommonSettings(local, next) && sameExtras(local.Extras, next.Extras) {
+				next.Updated = local.Updated
+			}
+			// New feature values have their own revision. Legacy edits to shared
+			// fields must not reset values absent from their protocol capabilities.
+			next.Disabled = local.Disabled
+			next.DisabledUpdated = disabledRevision(local)
+			if supportsDisabled(c) {
+				rr, lr := disabledRevision(remote), disabledRevision(local)
+				explicit := remote.DisabledUpdated > 0
+				if (explicit || remote.Disabled != local.Disabled) && (rr > lr || (explicit && rr == lr && remote.Disabled && !local.Disabled)) {
+					next.Disabled = remote.Disabled
+					next.DisabledUpdated = rr
 				}
-				remote.Power = local.Power
-				remote.Status = local.Status
-				state.TVs[i] = remote
+			}
+			before, _ := json.Marshal(local)
+			after, _ := json.Marshal(next)
+			if string(before) != string(after) {
+				state.TVs[i] = next
 				changed = true
 			}
+
 			break
 		}
 		if !found {
+			if !supportsDisabled(c) {
+				remote.Disabled = false
+				remote.DisabledUpdated = 0
+			}
 			state.TVs = append(state.TVs, remote)
 			changed = true
 		}
@@ -165,13 +197,37 @@ func mergeConfig(c sharedConfig) bool {
 	return changed
 }
 func syncKey() string { secrets.Lock(); defer secrets.Unlock(); return secrets.SyncKey }
-func syncPacket(request bool) ([]byte, error) {
+
+// Version 1 is the stable additive envelope. Version 2 is also emitted to
+// bridge v0.4.0, which required it to understand Disabled.
+func supportsDisabled(c sharedConfig) bool {
+	if c.Version == 2 {
+		return true
+	}
+	for _, feature := range c.Capabilities {
+		if feature == "disabled-v1" {
+			return true
+		}
+	}
+	return false
+}
+func syncPacket(request bool) ([]byte, error) { return syncPacketVersion(request, 1) }
+func syncPacketVersion(request bool, version int) ([]byte, error) {
 	state.Lock()
 	c := configSnapshotLocked(true)
 	state.Unlock()
+	c.Version = version
+	c.Capabilities = []string{"disabled-v1", "unknown-fields-v1"}
 	c.Request = request
+	for i := range c.Devices {
+		c.Devices[i].DisabledUpdated = disabledRevision(c.Devices[i])
+	}
+	if version == 2 {
+		prepareV04Bridge(&c)
+	}
 	return sealConfig(c, syncKey())
 }
+
 func syncStatus(s string) { state.Lock(); state.SyncStatus = s; state.Dirty = true; state.Unlock() }
 
 var lanConn *net.UDPConn
@@ -196,7 +252,7 @@ func startLAN() {
 			}
 			mergeConfig(cfg)
 			if cfg.Request {
-				if b, e := syncPacket(false); e == nil {
+				if b, e := syncPacketVersion(false, cfg.Version); e == nil {
 					c.WriteToUDP(b, addr)
 				}
 			}
@@ -210,9 +266,13 @@ func syncNow() string {
 	if lanConn == nil {
 		return "LAN sync unavailable; check whether another instance is open."
 	}
-	b, e := syncPacket(true)
-	if e != nil {
-		return e.Error()
+	var packets [][]byte
+	for _, version := range []int{2, 1} {
+		b, e := syncPacketVersion(true, version)
+		if e != nil {
+			return e.Error()
+		}
+		packets = append(packets, b)
 	}
 	destinations := map[string]bool{"255.255.255.255": true}
 	ifs, _ := net.Interfaces()
@@ -233,8 +293,10 @@ func syncNow() string {
 	}
 	sent := false
 	for ip := range destinations {
-		if _, e = lanConn.WriteToUDP(b, &net.UDPAddr{IP: net.ParseIP(ip), Port: syncPort}); e == nil {
-			sent = true
+		for _, b := range packets {
+			if _, e := lanConn.WriteToUDP(b, &net.UDPAddr{IP: net.ParseIP(ip), Port: syncPort}); e == nil {
+				sent = true
+			}
 		}
 	}
 	if !sent {

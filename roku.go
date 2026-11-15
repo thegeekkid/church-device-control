@@ -17,17 +17,19 @@ import (
 )
 
 type TV struct {
-	IP       string
-	MAC      string
-	Name     string
-	Model    string
-	Serial   string
-	Power    string
-	Status   string
-	Kind     string
-	Room     string
-	Updated  int64
-	Disabled bool
+	IP              string
+	MAC             string
+	Name            string
+	Model           string
+	Serial          string
+	Power           string
+	Status          string
+	Kind            string
+	Room            string
+	Updated         int64
+	Disabled        bool
+	DisabledUpdated int64
+	Extras          map[string]json.RawMessage `json:"-"`
 }
 type deviceInfo struct {
 	XMLName     xml.Name `xml:"device-info"`
@@ -209,6 +211,9 @@ func load() {
 		if validIP(tv.IP) {
 			tv.Status = "Saved — refresh to check"
 			tv.Power = ""
+			if tv.DisabledUpdated == 0 {
+				tv.DisabledUpdated = tv.Updated
+			}
 			if tv.Updated == 0 {
 				tv.Updated = 1
 			}
@@ -229,6 +234,8 @@ func upsert(t TV) {
 		if old.IP == t.IP || (old.Serial != "" && old.Serial == t.Serial) {
 			t.Name = old.Name
 			t.Disabled = old.Disabled
+			t.DisabledUpdated = old.DisabledUpdated
+			t.Extras = mergeExtras(old.Extras, t.Extras, false)
 			if t.MAC == "" {
 				t.MAC = old.MAC
 			}
@@ -468,6 +475,7 @@ func setDeviceDisabled(id string, disabled bool) error {
 				state.TVs[i].Power = "unknown"
 			}
 			state.TVs[i].Updated = time.Now().UnixNano()
+			state.TVs[i].DisabledUpdated = state.TVs[i].Updated
 			state.Dirty = true
 			return saveLocked()
 		}
