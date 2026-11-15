@@ -20,4 +20,4 @@ Kasa credentials and the sync key are protected locally with Windows DPAPI for t
 
 ## Release identity
 
-Official signed releases use Azure Artifact Signing with an OIDC identity restricted to this repository's `main`. Public pull-request CI does not receive signing permission. Signing authenticates the publisher and file integrity; it is not a guarantee that a program is free of defects. See [Signing and releases](docs/SIGNING.md).
+Official releases use Azure Artifact Signing with an OIDC identity restricted to this repository's `main`. Pull-request CI does not receive signing permission. See [Signing and releases](docs/SIGNING.md).

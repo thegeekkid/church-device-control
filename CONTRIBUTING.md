@@ -8,7 +8,7 @@ See [Development](docs/DEVELOPMENT.md) for the Go build and test commands. Run `
 
 Use your own local settings for hardware tests; do not commit `tvs.json`, `local-secrets.bin`, real credentials, or LAN sync keys. Tests should use clearly artificial fixtures.
 
-Original project contributions are made under the repository's MIT license. Do not copy code, icons, or other assets without a compatible license and the required notices. The current Kasa dependency has an [unresolved license](THIRD-PARTY-NOTICES.txt); do not assume that public source is sufficient permission.
+Original project contributions are made under the repository's MIT license. Include appropriate licenses and notices for third-party code and assets.
 
 Contributor CI does not sign or publish builds. Official releases are a maintainer operation from trusted `main`. Changes to workflows, dependencies, authentication, and sync deserve particular care in review.
 

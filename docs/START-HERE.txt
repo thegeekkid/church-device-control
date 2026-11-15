@@ -35,8 +35,7 @@ installation with elevation. Close the app before replacing or upgrading it.
 The taskbar helper shows a shortcut; right-click it and choose Pin to taskbar.
 
 Settings stay in %APPDATA%\ChurchRoku and survive upgrades/uninstall.
-Use only one instance per Windows session. Signed official releases use
-Azure Artifact Signing; Windows may still show SmartScreen warnings.
+Use only one instance per Windows session.
 
 HELP, SOURCE, AND LICENSES
 https://github.com/thegeekkid/church-device-control
@@ -44,4 +43,3 @@ https://github.com/thegeekkid/church-device-control/blob/main/docs/USER-GUIDE.md
 
 The installer includes LICENSE.txt and THIRD-PARTY-NOTICES.txt. Those files
 also accompany portable releases; retain them when redistributing a copy.
-See THIRD-PARTY-NOTICES.txt for the unresolved Kasa dependency license.

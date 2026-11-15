@@ -4,9 +4,9 @@ Download binaries and GitHub-generated source archives from [Releases](https://g
 
 ## Unreleased
 
-- License original project code and artwork under MIT; document the unresolved Kasa dependency license separately.
+- License original project code and artwork under MIT; include third-party notices.
 - Replace the old README with an introduction and a documentation index. Add current user, troubleshooting, development, signing, contribution, and security guides.
-- Stop producing the extra app-and-source ZIP. Future assets include the installer, standalone EXE, checksums, and license notices; automatic GitHub source archives remain.
+- Remove the extra app-and-source ZIP; include license notices with downloads.
 - Add read-only contributor CI and restrict manual release builds to this repository's `main`.
 
 ## v0.4.1

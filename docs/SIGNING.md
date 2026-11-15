@@ -1,8 +1,6 @@
 # Signing and releases
 
-Official releases can be signed on a GitHub-hosted Windows runner using Azure Artifact Signing, formerly Trusted Signing. No exported certificate private key, Azure client secret, or home computer is needed. Signed binaries still contain the certificate's publisher identity, and Windows may show SmartScreen warnings while reputation develops.
-
-The current dependency license issue in [third-party notices](../THIRD-PARTY-NOTICES.txt) must be resolved before a new public distribution.
+Official releases are signed on a GitHub-hosted Windows runner using Azure Artifact Signing and GitHub OIDC. No certificate private-key export or Azure client secret is needed.
 
 ## Azure federation
 
@@ -51,11 +49,11 @@ An optional protected release environment can add approval controls, but require
 
 1. Update version metadata in `winres/winres.json` and `installer/setup.iss`, regenerate resources, and update the workflow's default release tag.
 2. Write `docs/release-vX.Y.Z.txt` and add an entry to [CHANGELOG.md](../CHANGELOG.md). Keep version history out of the main README.
-3. Resolve license/notice changes for new or updated dependencies. Review tests and CI on `main`.
+3. Update third-party notices when dependencies change. Review tests and CI on `main`.
 4. Open **Actions > Build and release > Run workflow**, select `main`, enter the new version, and check **sign**. Check **publish_release** to publish after validation. Official publication requires signing.
 5. Check the resulting signatures and publisher. The workflow tests the EXE, installs/uninstalls in both scopes, verifies shortcuts, signs the EXE and installer, and computes checksums after signing. A signing failure stops publication; existing releases are not overwritten.
 
-Future uploaded assets are:
+Release assets:
 
 ```text
 Church-TV-Control.exe
@@ -65,7 +63,7 @@ LICENSE.txt
 THIRD-PARTY-NOTICES.txt
 ```
 
-The installer includes the licenses. Keep the notices with a portable copy when redistributing it. GitHub supplies the release's automatic source ZIP/tar.gz links; there is no separate application ZIP. Existing release downloads are retained.
+The installer includes the licenses. Keep the notices with a portable copy when redistributing it.
 
 ## References
 

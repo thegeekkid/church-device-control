@@ -2,8 +2,6 @@
 
 The app is written in Go with a native Win32 interface. It statically links its Kasa protocol dependency, so users do not install a language runtime. The UI currently targets Windows amd64; Linux can run the portable protocol and persistence tests.
 
-Before redistributing a build, resolve the dependency license issue in [third-party notices](../THIRD-PARTY-NOTICES.txt).
-
 ## Build on Windows
 
 Install Go 1.27.3 or later. From a source checkout, in PowerShell:
@@ -53,7 +51,7 @@ Copy-Item docs/START-HERE.txt build/START-HERE.txt
 ./scripts/package.ps1
 ```
 
-The installer includes the app, quick-start text, MIT license, and third-party notices. Packaging copies the standalone EXE and notices to `dist` and generates checksums. It does not create an additional ZIP or bundle source; GitHub creates source archives from each release tag.
+The installer includes the app, quick-start text, MIT license, and third-party notices. Packaging copies the standalone EXE and notices to `dist` and generates checksums.
 
 The manual build/release workflow validates both installation scopes, shortcut targets, the taskbar helper, and uninstallation. For signed builds, signatures are verified before publishing. See [Signing and releases](SIGNING.md).
 

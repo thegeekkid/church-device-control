@@ -9,10 +9,9 @@ Built for church volunteers who need a few clear controls before and after a ser
 **[Get the latest release](https://github.com/thegeekkid/church-device-control/releases/latest)** for Windows 10 or 11, 64-bit Intel/AMD:
 
 - **Church-Device-Control-Setup.exe** installs for your Windows user without administrator access, or for all users with elevation. Shortcuts are optional.
-- **Church-TV-Control.exe** runs directly, with no installation. The filename is retained for existing shortcuts.
-- **SHA256.txt** contains checksums. License and third-party notices accompany future releases.
+- **Church-TV-Control.exe** runs directly, with no installation.
 
-No Python, Go, or separate .NET runtime is needed to run the app. Official signed releases use Azure Artifact Signing; signing does not guarantee that Windows will skip every SmartScreen warning. GitHub provides **Source code (zip)** and **Source code (tar.gz)** for each release. Future releases omit the additional app-and-source ZIP.
+No Python, Go, or separate .NET runtime is needed to run the app.
 
 ## What it does
 
@@ -40,7 +39,7 @@ The native interface currently runs on Windows only. Network discovery and sync 
 
 ## Source, contributions, and license
 
-Original project code and the generated TV icon are available under the **[MIT license](LICENSE)**. The current Kasa dependency has **no published license**; permission or a replacement is needed before the complete project can be presented as fully open source. See [third-party notices](THIRD-PARTY-NOTICES.txt).
+Original project code and the generated TV icon are available under the **[MIT license](LICENSE)**. See [third-party notices](THIRD-PARTY-NOTICES.txt) for dependency information.
 
 [Contributing](CONTRIBUTING.md) · [Build from source](docs/DEVELOPMENT.md) · [Security](SECURITY.md) · [Release history](CHANGELOG.md)
 

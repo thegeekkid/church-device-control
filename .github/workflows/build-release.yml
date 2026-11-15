@@ -183,8 +183,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $notes = "docs/release-$env:RELEASE_TAG.txt"
-          $signatureNote = if ($env:SIGN_BUILD -eq 'true') { 'Signed using Azure Artifact Signing.' } else { 'This build is unsigned; Azure signing is available after configuration.' }
-          $downloads = 'Downloads: use the installer or standalone executable. Keep LICENSE.txt and THIRD-PARTY-NOTICES.txt with redistributed portable copies. GitHub provides source archives below; there is no additional app/source ZIP.'
-          (Get-Content $notes -Raw) + "`n`n" + $signatureNote + "`n`n" + $downloads | Set-Content build/release-notes.txt -Encoding utf8
-          gh release create $env:RELEASE_TAG dist/Church-TV-Control.exe dist/Church-Device-Control-Setup.exe dist/SHA256.txt dist/LICENSE.txt dist/THIRD-PARTY-NOTICES.txt --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "$env:RELEASE_TAG — Church Device Control" --notes-file build/release-notes.txt
+          gh release create $env:RELEASE_TAG dist/Church-TV-Control.exe dist/Church-Device-Control-Setup.exe dist/SHA256.txt dist/LICENSE.txt dist/THIRD-PARTY-NOTICES.txt --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "$env:RELEASE_TAG — Church Device Control" --notes-file $notes
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
