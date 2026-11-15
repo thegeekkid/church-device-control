@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+const kasaOperationTimeout = 12 * time.Second
+const kasaRequestTimeout = 2500 * time.Millisecond
+
 func kasaClient(ip string) (*tapo.Strip, error) {
 	if !validIP(ip) {
 		return nil, fmt.Errorf("Enter a valid IPv4 address")
@@ -18,19 +21,25 @@ func kasaClient(ip string) (*tapo.Strip, error) {
 	secrets.Lock()
 	u, p := secrets.User, secrets.Password
 	secrets.Unlock()
-	return tapo.New(ip, tapo.WithCredentials(u, p), tapo.WithTimeout(3*time.Second))
+	return tapo.New(ip, tapo.WithCredentials(u, p), tapo.WithTimeout(kasaRequestTimeout))
 }
 
 var connectKasa = kasaClient
 
-func inspectDevice(t TV) (TV, error) {
-	if t.Kind == "kasa" {
-		return inspectKasa(t.IP)
+func inspectDevice(t TV) (TV, error) { return inspectDeviceContext(context.Background(), t) }
+func inspectDeviceContext(ctx context.Context, t TV) (TV, error) {
+	if deviceDisabled(t) {
+		return TV{}, fmt.Errorf("device is disabled")
 	}
-	return inspect(t.IP)
+	if t.Kind == "kasa" {
+		return inspectKasaContext(ctx, t.IP)
+	}
+	return inspectRokuContext(ctx, t.IP)
 }
-func inspectKasa(ip string) (TV, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+
+func inspectKasa(ip string) (TV, error) { return inspectKasaContext(context.Background(), ip) }
+func inspectKasaContext(parent context.Context, ip string) (TV, error) {
+	ctx, cancel := context.WithTimeout(parent, kasaOperationTimeout)
 	defer cancel()
 	c, raw, e := probeKasa(ctx, ip)
 	if e != nil {
@@ -73,13 +82,16 @@ func inspectKasa(ip string) (TV, error) {
 	return TV{IP: ip, Name: info.Alias, Model: info.Model, Serial: info.DeviceID, MAC: normalizeMAC(info.MAC), Kind: "kasa", Power: p, Status: "Reachable"}, nil
 }
 func devicePower(t TV, cmd string) error {
+	if deviceDisabled(t) {
+		return fmt.Errorf("device is disabled; enable it before sending commands")
+	}
 	if t.Kind != "kasa" {
 		return power(t.IP, cmd)
 	}
 	if cmd != "PowerOn" && cmd != "PowerOff" {
 		return fmt.Errorf("invalid command")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), kasaOperationTimeout)
 	defer cancel()
 	c, raw, e := probeKasa(ctx, t.IP)
 	if e != nil {
@@ -199,7 +211,7 @@ func legacyKasaIPs() []string {
 // instead use the account e-mail + kasaSetup for the local KLAP handshake.
 // Reference: python-kasa/python-kasa#1840. This never changes cloud credentials.
 var setupKasaClient = func(ip, user string) (*tapo.Strip, error) {
-	return tapo.New(ip, tapo.WithCredentials(user, "kasaSetup"), tapo.WithTimeout(3*time.Second), tapo.WithDisableLegacy())
+	return tapo.New(ip, tapo.WithCredentials(user, "kasaSetup"), tapo.WithTimeout(kasaRequestTimeout), tapo.WithDisableLegacy())
 }
 
 func negotiateKasa(ctx context.Context, ip string) (*tapo.Strip, tapo.RawResponse, error) {

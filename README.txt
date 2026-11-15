@@ -97,3 +97,10 @@ The app now includes the statically compiled github.com/pborges/tapo protocol
 library (pinned in go.mod/go.sum); no Go/Python/runtime installation is needed.
 Developers: use Go 1.27.3 or later. The portable EXE and installer are separate
 release downloads in addition to the ZIP.
+
+VERSION 0.4.0
+Use Disable selected / Enable selected for occasionally used devices. Gray
+Disabled rows are excluded from refresh and all power commands; discovery still
+checks them. The setting is saved and synced. Update all installations to 0.4.0
+to respect disabled devices. Device checks now run concurrently with shorter
+timeouts. See docs/SETUP-v0.3.txt for details.

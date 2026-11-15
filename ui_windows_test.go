@@ -43,7 +43,7 @@ func TestNativeTableAndIcon(t *testing.T) {
 	if list == 0 {
 		t.Fatal("ListView creation failed")
 	}
-	state.TVs = []TV{{Name: "Lobby", IP: "192.168.1.5", MAC: "AA:BB:CC:DD:EE:FF", Power: "PowerOn", Status: "Reachable"}, {Name: "Sanctuary", IP: "192.168.1.6", Power: "Ready", Status: "Reachable"}, {Name: "Classroom", IP: "192.168.1.7", Status: "Unreachable"}}
+	state.TVs = []TV{{Name: "Lobby", IP: "192.168.1.5", MAC: "AA:BB:CC:DD:EE:FF", Power: "PowerOn", Status: "Reachable"}, {Name: "Sanctuary", IP: "192.168.1.6", Power: "Ready", Status: "Reachable"}, {Name: "Classroom", IP: "192.168.1.7", Status: "Unreachable", Disabled: true}}
 	state.Dirty = true
 	update()
 	if count := callmsg(list, 0x1004, 0, 0); count != 3 {
@@ -58,14 +58,14 @@ func TestNativeTableAndIcon(t *testing.T) {
 	for _, c := range []struct {
 		row, col int
 		want     string
-	}{{0, 0, "On"}, {0, 1, "Lobby"}, {0, 4, "192.168.1.5"}, {0, 5, "AA:BB:CC:DD:EE:FF"}, {1, 0, "Off"}, {2, 0, "Unknown"}} {
+	}{{0, 0, "On"}, {0, 1, "Lobby"}, {0, 4, "192.168.1.5"}, {0, 5, "AA:BB:CC:DD:EE:FF"}, {1, 0, "Off"}, {2, 0, "Disabled"}} {
 		if got := getCell(c.row, c.col); got != c.want {
 			t.Errorf("cell %d,%d = %q want %q", c.row, c.col, got, c.want)
 		}
 	}
 	images := callmsg(list, 0x1002, 1, 0)
 	count, _, _ := common.NewProc("ImageList_GetImageCount").Call(images)
-	if count != 3 {
+	if count != 4 {
 		t.Fatalf("indicator images: %d", count)
 	}
 	item := lvItem{State: 3, StateMask: 3}

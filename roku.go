@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -16,16 +17,17 @@ import (
 )
 
 type TV struct {
-	IP      string
-	MAC     string
-	Name    string
-	Model   string
-	Serial  string
-	Power   string
-	Status  string
-	Kind    string
-	Room    string
-	Updated int64
+	IP       string
+	MAC      string
+	Name     string
+	Model    string
+	Serial   string
+	Power    string
+	Status   string
+	Kind     string
+	Room     string
+	Updated  int64
+	Disabled bool
 }
 type deviceInfo struct {
 	XMLName     xml.Name `xml:"device-info"`
@@ -39,17 +41,22 @@ type deviceInfo struct {
 	EthernetMAC string   `xml:"ethernet-mac"`
 }
 
-var client = &http.Client{Timeout: 4 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+var client = &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
 func validIP(s string) bool {
 	ip := net.ParseIP(s)
 	return ip != nil && ip.To4() != nil && !ip.IsMulticast() && !ip.IsUnspecified() && !ip.Equal(net.IPv4bcast)
 }
-func inspect(ip string) (TV, error) {
+func inspect(ip string) (TV, error) { return inspectRokuContext(context.Background(), ip) }
+func inspectRokuContext(ctx context.Context, ip string) (TV, error) {
 	if !validIP(ip) {
 		return TV{}, fmt.Errorf("Enter an IPv4 address, such as 192.168.1.42")
 	}
-	r, e := client.Get("http://" + ip + ":8060/query/device-info")
+	req, e := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+ip+":8060/query/device-info", nil)
+	if e != nil {
+		return TV{}, e
+	}
+	r, e := client.Do(req)
 	if e != nil {
 		return TV{}, e
 	}
@@ -221,6 +228,7 @@ func upsert(t TV) {
 	for i, old := range state.TVs {
 		if old.IP == t.IP || (old.Serial != "" && old.Serial == t.Serial) {
 			t.Name = old.Name
+			t.Disabled = old.Disabled
 			if t.MAC == "" {
 				t.MAC = old.MAC
 			}
@@ -276,32 +284,60 @@ func refreshOnLaunch() {
 }
 func refresh() string { return refreshTVs(snapshot()) }
 func refreshTVs(tvs []TV) string {
+	var workers sync.WaitGroup
+	slots := make(chan struct{}, 4)
 	for _, t := range tvs {
-		fresh, e := inspectDevice(t)
-		if e != nil && t.Kind == "kasa" {
-			time.Sleep(time.Second)
-			fresh, e = inspectDevice(t)
+		if deviceDisabled(t) {
+			continue
 		}
-		if e != nil {
-			state.Lock()
-			for i := range state.TVs {
-				if state.TVs[i].IP == t.IP {
-					if t.Kind == "kasa" {
-						state.TVs[i].Status = "Failed: " + e.Error()
-					} else {
-						state.TVs[i].Status = "Unreachable (asleep or offline)"
-					}
-					state.TVs[i].Power = "unknown"
+		slots <- struct{}{}
+		workers.Add(1)
+		go func(t TV) {
+			defer workers.Done()
+			defer func() { <-slots }()
+			if deviceDisabled(t) {
+				return
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), kasaOperationTimeout)
+			defer cancel()
+			fresh, e := inspectDeviceContext(ctx, t)
+			if e != nil && t.Kind == "kasa" && !deviceDisabled(t) {
+				timer := time.NewTimer(time.Second)
+				select {
+				case <-timer.C:
+					fresh, e = inspectDeviceContext(ctx, t)
+				case <-ctx.Done():
+					timer.Stop()
 				}
 			}
-			state.Unlock()
-		} else {
-			upsert(fresh)
-		}
+			if deviceDisabled(t) {
+				return
+			}
+			if e != nil {
+				state.Lock()
+				for i := range state.TVs {
+					if deviceID(state.TVs[i]) == deviceID(t) && !state.TVs[i].Disabled {
+						if t.Kind == "kasa" {
+							state.TVs[i].Status = "Failed: " + e.Error()
+						} else {
+							state.TVs[i].Status = "Unreachable (asleep or offline)"
+						}
+						state.TVs[i].Power = "unknown"
+						state.Dirty = true
+					}
+				}
+				state.Unlock()
+			} else {
+				upsert(fresh)
+			}
+		}(t)
 	}
-	return "Refresh complete. Unreachable does not necessarily mean powered off."
+	workers.Wait()
+	return "Refresh complete. Disabled devices skipped; unreachable does not necessarily mean off."
 }
+
 func sendPower(tvs []TV, cmd string) string {
+	tvs = enabledDevices(tvs)
 	ok := 0
 	var failures []string
 	for _, t := range tvs {
@@ -332,6 +368,10 @@ func sendPower(tvs []TV, cmd string) string {
 // Keep the delay and network queries in the existing background job so the
 // window continues repainting and another command cannot race verification.
 func sendPowerAndRefresh(tvs []TV, cmd string) string {
+	tvs = enabledDevices(tvs)
+	if len(tvs) == 0 {
+		return "No enabled devices selected."
+	}
 	result := sendPower(tvs, cmd)
 	state.Lock()
 	state.Message = "Command sent. Checking TV status in one second…"
@@ -348,6 +388,9 @@ func sendPowerAndRefresh(tvs []TV, cmd string) string {
 
 // The dot represents verified power state, not simply network reachability.
 func tvIndicator(t TV) (int, string) {
+	if t.Disabled {
+		return 3, "Disabled"
+	}
 	if t.Status != "Reachable" {
 		if strings.HasPrefix(t.Status, "Failed:") {
 			return 2, "Error"
@@ -393,4 +436,41 @@ func rokuMAC(d deviceInfo) string {
 		return wifi
 	}
 	return wired
+}
+
+func deviceDisabled(t TV) bool {
+	state.Lock()
+	defer state.Unlock()
+	for _, current := range state.TVs {
+		if deviceID(current) == deviceID(t) {
+			return current.Disabled
+		}
+	}
+	return t.Disabled
+}
+func enabledDevices(tvs []TV) []TV {
+	out := make([]TV, 0, len(tvs))
+	for _, t := range tvs {
+		if !deviceDisabled(t) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+func setDeviceDisabled(id string, disabled bool) error {
+	state.Lock()
+	defer state.Unlock()
+	for i := range state.TVs {
+		if deviceID(state.TVs[i]) == id {
+			state.TVs[i].Disabled = disabled
+			if !disabled {
+				state.TVs[i].Status = "Enabled — awaiting refresh"
+				state.TVs[i].Power = "unknown"
+			}
+			state.TVs[i].Updated = time.Now().UnixNano()
+			state.Dirty = true
+			return saveLocked()
+		}
+	}
+	return fmt.Errorf("device no longer exists")
 }

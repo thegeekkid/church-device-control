@@ -34,7 +34,7 @@ func deviceID(t TV) string {
 	return k + ":ip:" + t.IP
 }
 func configSnapshotLocked(wire bool) sharedConfig {
-	c := sharedConfig{Version: 1, Deleted: map[string]int64{}}
+	c := sharedConfig{Version: 2, Deleted: map[string]int64{}}
 	for k, v := range state.Deleted {
 		c.Deleted[k] = v
 	}
@@ -85,7 +85,7 @@ func openConfig(b []byte, key string) (sharedConfig, error) {
 	if e = json.Unmarshal(plain, &c); e != nil {
 		return c, e
 	}
-	if c.Version != 1 || len(c.Devices) > 500 || len(c.Deleted) > 2000 {
+	if (c.Version != 1 && c.Version != 2) || len(c.Devices) > 500 || len(c.Deleted) > 2000 {
 		return c, fmt.Errorf("unsupported settings")
 	}
 	for _, t := range c.Devices {
@@ -130,6 +130,9 @@ func mergeConfig(c sharedConfig) bool {
 			if remote.Updated > local.Updated || (remote.Updated == local.Updated && string(rb) > string(lb)) {
 				if remote.MAC == "" {
 					remote.MAC = local.MAC
+				}
+				if c.Version < 2 {
+					remote.Disabled = local.Disabled
 				}
 				remote.Power = local.Power
 				remote.Status = local.Status
@@ -243,7 +246,7 @@ func periodicWork() string { s := syncNow(); syncStatus(s); return refresh() }
 func roomTargets(room string) []TV {
 	out := []TV{}
 	for _, t := range snapshot() {
-		if strings.EqualFold(strings.TrimSpace(t.Room), strings.TrimSpace(room)) && strings.TrimSpace(room) != "" {
+		if strings.EqualFold(strings.TrimSpace(t.Room), strings.TrimSpace(room)) && strings.TrimSpace(room) != "" && !t.Disabled {
 			out = append(out, t)
 		}
 	}

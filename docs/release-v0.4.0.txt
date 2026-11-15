@@ -1,0 +1,12 @@
+Church Device Control v0.4.0
+
+- Select any Roku TV or Kasa plug and use Disable selected / Enable selected. Disabled devices stay in the table with a gray Disabled indicator.
+- Disabled devices are excluded from launch, periodic, manual and post-command refreshes, and from selected, room and all-device power commands. Discovery still checks them and updates metadata while preserving the disabled flag.
+- Disabling is available during a background refresh. An already in-flight request may need to finish, but further checks/commands are skipped. Re-enabling refreshes that device when the application is idle.
+- Persist and LAN-sync the disabled setting. Update ALL installations to this version to honor disabled devices. Settings-sync wire version 2 is required for sending the flag; older peers do not receive new-format updates. Incoming version-1 edits cannot clear a disabled flag.
+- Reduce per-request timeouts from 3 to 2.5 seconds for Kasa and 4 to 3 seconds for Roku. Kasa status checks and their one retry share a 12-second total budget rather than potentially taking 41 seconds.
+- Refresh up to four devices concurrently and display results as each completes, so one offline plug does not delay reading the other devices.
+
+Signed standalone EXE, installer and ZIP. Saved devices, rooms, credentials and settings are preserved. Older saved devices start enabled. MAC display, full Details, Kasa session reuse and the installer shortcut-helper fix are retained.
+
+Validation: disabled-device network exclusion, direct command rejection, room targeting, discovery metadata preservation, restart persistence, settings sync and old-peer compatibility; concurrent refresh and parent deadline tests; existing protocol, MAC, session, credential, native Windows table, installer and signature checks. Physical hardware behavior still needs an on-site test.

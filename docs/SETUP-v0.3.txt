@@ -82,3 +82,20 @@ remain blank until a device supplies one. MAC metadata is saved and LAN-synced.
 0.3.4: Use Details or double-click a device row to view full errors. Ctrl+C
 copies the dialog. Kasa sessions are reused; temporary status failures get one
 retry. Changing account credentials causes a fresh authentication.
+
+0.4.0 — DISABLED DEVICES
+Select a device and click Disable selected. The button changes to Enable selected
+when a disabled row is selected. Disabled devices show gray Disabled, with the
+last reported power hidden so it cannot be mistaken for a current reading.
+They receive no regular refreshes or power commands, including selected, room
+and all-device commands. To operate one again, enable it first. Discovery still
+checks its address and metadata, but never re-enables it automatically.
+Disabling is available while a refresh is running; an already in-flight request
+may finish. Enabling initiates a check if the app is idle; otherwise use Refresh
+status when the current operation finishes or wait for the next periodic check.
+The disabled flag is saved per device and shared with other new-version peers.
+UPDATE EVERY INSTALLATION: older applications cannot honor disabled devices and
+do not receive version-2 sync packets. Incoming older-peer edits cannot re-enable
+a disabled device on the new version. Avoid running older software afterward.
+Requests use slightly shorter timeouts. Up to four devices refresh concurrently.
+Each Kasa status check, including its retry, has a total 12-second limit.

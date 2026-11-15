@@ -24,6 +24,7 @@ var getText = user.NewProc("GetWindowTextW")
 var enable = user.NewProc("EnableWindow")
 var win, list, ipbox, namebox, status uintptr
 var buttons []uintptr
+var toggleButton, detailsButton uintptr
 var font uintptr
 var roomBox, userBox, passwordBox, syncBox uintptr
 var displayedTVs []TV
@@ -94,8 +95,8 @@ func initTable() {
 		col := lvColumn{Mask: 7, Width: int32(c.width), Text: w(c.name)}
 		callmsg(list, 0x1061, uintptr(i), uintptr(unsafe.Pointer(&col)))
 	}
-	images, _, _ := common.NewProc("ImageList_Create").Call(16, 16, 0x21, 3, 0)
-	for _, color := range [][3]byte{{24, 140, 73}, {200, 48, 48}, {211, 153, 0}} {
+	images, _, _ := common.NewProc("ImageList_Create").Call(16, 16, 0x21, 4, 1)
+	for _, color := range [][3]byte{{24, 140, 73}, {200, 48, 48}, {211, 153, 0}, {128, 128, 128}} {
 		data := dotIcon(color)
 		icon, _, _ := user.NewProc("CreateIconFromResourceEx").Call(uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)), 1, 0x30000, 16, 16, 0)
 		common.NewProc("ImageList_ReplaceIcon").Call(images, ^uintptr(0), icon)
@@ -169,7 +170,12 @@ func update() {
 		image, text := tvIndicator(t)
 		item := lvItem{Mask: 3, Item: int32(row), Text: w(text), Image: int32(image)}
 		callmsg(list, 0x104D, 0, uintptr(unsafe.Pointer(&item)))
-		for col, value := range []string{t.Name, t.Room, deviceKind(t), t.IP, t.MAC, t.Power, t.Status} {
+		reported, result := t.Power, t.Status
+		if t.Disabled {
+			reported = "—"
+			result = "Disabled — discovery only"
+		}
+		for col, value := range []string{t.Name, t.Room, deviceKind(t), t.IP, t.MAC, reported, result} {
 			setCell(row, col+1, value)
 		}
 	}
@@ -194,8 +200,45 @@ func update() {
 	for _, b := range buttons {
 		enable.Call(b, v)
 	}
+	enable.Call(toggleButton, 1)
+	enable.Call(detailsButton, 1)
+	label(toggleButton, "Disable selected")
+	if idx >= 0 && idx < len(tvs) && tvs[idx].Disabled {
+		label(toggleButton, "Enable selected")
+	}
 }
 func action(id int) {
+	if id == 17 {
+		showDeviceDetails()
+		return
+	}
+	if id == 18 {
+		idx := selected()
+		if idx < 0 || idx >= len(displayedTVs) {
+			label(status, "Select a device first.")
+			return
+		}
+		t := displayedTVs[idx]
+		disabled := !deviceDisabled(t)
+		if e := setDeviceDisabled(deviceID(t), disabled); e != nil {
+			label(status, e.Error())
+			return
+		}
+		state.Lock()
+		if disabled {
+			state.Message = t.Name + " disabled; discovery will still check it."
+		} else {
+			state.Message = t.Name + " enabled."
+		}
+		state.Unlock()
+		update()
+		go func() { syncStatus(syncNow()) }()
+		if !disabled {
+			runJob(func() string { return refreshTVs([]TV{t}) })
+		}
+		return
+	}
+
 	state.Lock()
 	busy := state.Busy
 	state.Unlock()
@@ -259,15 +302,16 @@ func action(id int) {
 		state.Dirty = true
 		state.Unlock()
 	case 5, 6, 7, 8:
-		targets := tvs
+		targets := enabledDevices(tvs)
 		if id == 5 || id == 6 {
 			if idx < 0 || idx >= len(tvs) {
 				label(status, "Select a TV first.")
 				return
 			}
-			targets = []TV{tvs[idx]}
+			targets = enabledDevices([]TV{tvs[idx]})
 		}
 		if len(targets) == 0 {
+			label(status, "No enabled devices selected. Enable the device before sending commands.")
 			return
 		}
 		cmd := "PowerOn"
@@ -275,7 +319,7 @@ func action(id int) {
 			cmd = "PowerOff"
 		}
 		if id == 7 || id == 8 {
-			r, _, _ := user.NewProc("MessageBoxW").Call(win, uintptr(unsafe.Pointer(w(fmt.Sprintf("Send %s to all %d saved TVs?", cmd, len(targets))))), uintptr(unsafe.Pointer(w("Confirm group command"))), 0x24)
+			r, _, _ := user.NewProc("MessageBoxW").Call(win, uintptr(unsafe.Pointer(w(fmt.Sprintf("Send %s to all %d enabled devices?", cmd, len(targets))))), uintptr(unsafe.Pointer(w("Confirm group command"))), 0x24)
 			if r != 6 {
 				return
 			}
@@ -404,6 +448,11 @@ func proc(h uintptr, m uint32, a, b uintptr) uintptr {
 			if idx >= 0 && idx < len(t) {
 				label(namebox, t[idx].Name)
 				label(roomBox, t[idx].Room)
+				if t[idx].Disabled {
+					label(toggleButton, "Enable selected")
+				} else {
+					label(toggleButton, "Disable selected")
+				}
 			}
 			return 0
 		}
@@ -462,7 +511,7 @@ func main() {
 	}
 	button("Discover devices", 20, 88, 160, 1)
 	button("Refresh status", 192, 88, 160, 2)
-	control("STATIC", "Status: green = on  •  red = off  •  yellow = unknown / pending / unreachable", 0, 20, 138, 1010, 24, 0)
+	control("STATIC", "Green = on  •  red = off  •  yellow = unknown / pending / error  •  gray = disabled", 0, 20, 138, 1010, 24, 0)
 	initTable()
 	button("Selected ON", 20, 452, 160, 5)
 	button("Selected OFF", 192, 452, 160, 6)
@@ -483,7 +532,10 @@ func main() {
 	control("STATIC", "Assign a room above, then Save device. Enter a room name above to control that room.", 0, 20, 626, 1020, 24, 0)
 	button("Settings…", 365, 88, 150, 16)
 	button("Sync + refresh", 530, 88, 170, 15)
-	button("Details…", 715, 88, 150, 17)
+	button("Details…", 715, 88, 115, 17)
+	detailsButton = buttons[len(buttons)-1]
+	button("Disable selected", 840, 88, 200, 18)
+	toggleButton = buttons[len(buttons)-1]
 	status = control("STATIC", "", 0, 20, 664, 1020, 65, 0)
 	user.NewProc("SetTimer").Call(win, 1, 250, 0)
 	update()
@@ -551,6 +603,6 @@ func showDeviceDetails() {
 	state.Lock()
 	operation := state.Message
 	state.Unlock()
-	body := fmt.Sprintf("Device: %s\r\nRoom: %s\r\nType: %s\r\nIP: %s\r\nMAC: %s\r\nReported power: %s\r\n\r\nLast result:\r\n%s\r\n\r\nLast operation:\r\n%s\r\n\r\nPress Ctrl+C to copy this dialog.", t.Name, t.Room, deviceKind(t), t.IP, t.MAC, t.Power, t.Status, operation)
+	body := fmt.Sprintf("Device: %s\r\nRoom: %s\r\nType: %s\r\nIP: %s\r\nMAC: %s\r\nReported power: %s\r\nDisabled: %t\r\n\r\nLast result:\r\n%s\r\n\r\nLast operation:\r\n%s\r\n\r\nPress Ctrl+C to copy this dialog.", t.Name, t.Room, deviceKind(t), t.IP, t.MAC, t.Power, t.Disabled, t.Status, operation)
 	user.NewProc("MessageBoxW").Call(win, uintptr(unsafe.Pointer(w(body))), uintptr(unsafe.Pointer(w("Device details"))), 0x40)
 }
