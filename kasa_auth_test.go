@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/pborges/tapo"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestKasaSetupAccountFallback(t *testing.T) {
@@ -37,6 +39,7 @@ func testKasaAuthenticatedPowerAndStatus(t *testing.T, modern bool) {
 	var authenticated bool
 	handshakeCount := 0
 	failNextRead := false
+	rejectAuthentication := false
 	kasaSessions.Lock()
 	kasaSessions.ByIP = map[string]kasaSession{}
 	kasaSessions.Unlock()
@@ -56,6 +59,10 @@ func testKasaAuthenticatedPowerAndStatus(t *testing.T, modern bool) {
 		switch r.URL.Path {
 		case "/app/handshake1":
 			handshakeCount++
+			if rejectAuthentication {
+				w.Write(make([]byte, 48))
+				return
+			}
 			local = append([]byte(nil), body...)
 			w.Header().Set("Set-Cookie", "TP_SESSIONID=test-session")
 			w.Write(append(append([]byte(nil), remote...), hash(local, remote, auth[:])...))
@@ -206,6 +213,86 @@ func testKasaAuthenticatedPowerAndStatus(t *testing.T, modern bool) {
 	mu.Unlock()
 	if changedHandshakes <= finalHandshakes {
 		t.Fatal("credential change reused the old session")
+	}
+	// A failed handshake backs off subsequent probes without sleeping workers.
+	mu.Lock()
+	rejectAuthentication = true
+	mu.Unlock()
+	kasaSessions.Lock()
+	delete(kasaSessions.ByIP, "127.0.0.1")
+	kasaSessions.Unlock()
+	for failure := 1; failure <= 6; failure++ {
+		if failure > 1 {
+			kasaSessions.Lock()
+			entry := kasaSessions.ByIP["127.0.0.1"]
+			entry.RetryAt = time.Now().Add(-time.Second)
+			kasaSessions.ByIP["127.0.0.1"] = entry
+			kasaSessions.Unlock()
+		}
+		started := time.Now()
+		if _, e := inspectKasa("127.0.0.1"); !isKasaAuthenticationError(e) {
+			t.Fatal("authentication failure was not preserved", e)
+		}
+		wantWait := 30 * time.Second * time.Duration(1<<uint(failure-1))
+		if wantWait > 5*time.Minute {
+			wantWait = 5 * time.Minute
+		}
+		kasaSessions.Lock()
+		entry := kasaSessions.ByIP["127.0.0.1"]
+		kasaSessions.Unlock()
+		if entry.RetryAt.Before(started.Add(wantWait)) || entry.RetryAt.After(time.Now().Add(wantWait)) {
+			t.Fatalf("failure %d has incorrect retry time: %+v", failure, entry)
+		}
+		mu.Lock()
+		attempts := handshakeCount
+		mu.Unlock()
+		_, e := inspectKasa("127.0.0.1")
+		var cooldown *kasaAuthCooldownError
+		if !errors.As(e, &cooldown) {
+			t.Fatal("cooldown not reported", e)
+		}
+		mu.Lock()
+		after := handshakeCount
+		mu.Unlock()
+		if after != attempts {
+			t.Fatal("cooldown retried authentication")
+		}
+	}
+	// A new credential fingerprint retries immediately and resets the delay.
+	secrets.Lock()
+	previousPassword := secrets.Password
+	secrets.Password = "new-credential-during-cooldown"
+	secrets.Unlock()
+	defer func() { secrets.Lock(); secrets.Password = previousPassword; secrets.Unlock() }()
+	mu.Lock()
+	attempts := handshakeCount
+	mu.Unlock()
+	_, e = inspectKasa("127.0.0.1")
+	if !isKasaAuthenticationError(e) {
+		t.Fatal(e)
+	}
+	mu.Lock()
+	after := handshakeCount
+	mu.Unlock()
+	kasaSessions.Lock()
+	entry := kasaSessions.ByIP["127.0.0.1"]
+	kasaSessions.Unlock()
+	if after <= attempts || entry.AuthFailures != 1 {
+		t.Fatal("credential change did not restart authentication", entry)
+	}
+	// Explicit discovery permits checking a firmware/account fix immediately.
+	mu.Lock()
+	rejectAuthentication = false
+	mu.Unlock()
+	retryFailedKasaAuthentication()
+	if _, e = inspectKasa("127.0.0.1"); e != nil {
+		t.Fatal("discovery reset did not allow recovery", e)
+	}
+	kasaSessions.Lock()
+	entry = kasaSessions.ByIP["127.0.0.1"]
+	kasaSessions.Unlock()
+	if entry.Client == nil || entry.AuthFailures != 0 || !entry.RetryAt.IsZero() {
+		t.Fatal("success retained failure state", entry)
 	}
 
 }

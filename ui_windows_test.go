@@ -182,3 +182,18 @@ func TestWindowsProtectedCredentials(t *testing.T) {
 		t.Fatal("null credentials were accepted")
 	}
 }
+
+func TestDetailsIncludeBuildAndFullSyncErrorsWithoutSelection(t *testing.T) {
+	syncResult := "LAN sync partially sent (2 of 4 packets). Failed: " + strings.Repeat("long adapter diagnostic; ", 30)
+	for _, tv := range []*TV{nil, {Name: "Lobby TV", IP: "192.0.2.10", Kind: "roku"}} {
+		body := deviceDetailsBody(tv, "Refresh complete.", syncResult)
+		for _, want := range []string{"Version:", "Source commit:", syncResult, "Refresh complete.", "Ctrl+C"} {
+			if !strings.Contains(body, want) {
+				t.Fatalf("details omitted %q", want)
+			}
+		}
+		if tv != nil && !strings.Contains(body, "Device: Lobby TV") {
+			t.Fatal("device details lost", body)
+		}
+	}
+}

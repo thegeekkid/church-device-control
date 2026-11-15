@@ -13,10 +13,12 @@ $env:GOOS = 'windows'
 $env:GOARCH = 'amd64'
 $env:CGO_ENABLED = '0'
 New-Item -ItemType Directory -Force build | Out-Null
-go build -buildvcs=false -trimpath -ldflags='-s -w -H=windowsgui' -o build/Church-TV-Control.exe .
+go build -trimpath -ldflags='-s -w -H=windowsgui' -o build/Church-TV-Control.exe .
 ```
 
 Developer builds are unsigned unless you configure your own signing identity. The checked-in `rsrc_windows_amd64.syso` supplies the icon, manifest, and version information; the installed Go version must satisfy `go.mod`.
+
+Official builds record the source commit in Go's VCS metadata and verify it matches the release workflow's commit with no modified sources. **Details** shows the version and commit; `go version -m Church-TV-Control.exe` also reads the embedded metadata. Builds from source archives without Git metadata identify the commit as unrecorded.
 
 ## Tests
 

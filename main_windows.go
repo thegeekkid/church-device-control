@@ -598,14 +598,25 @@ func openSettings() {
 
 func showDeviceDetails() {
 	idx := selected()
-	if idx < 0 || idx >= len(displayedTVs) {
-		label(status, "Select a device first.")
-		return
+	var selectedTV *TV
+	if idx >= 0 && idx < len(displayedTVs) {
+		selectedTV = &displayedTVs[idx]
 	}
-	t := displayedTVs[idx]
 	state.Lock()
-	operation := state.Message
+	operation, syncResult := state.Message, state.SyncStatus
 	state.Unlock()
-	body := fmt.Sprintf("Device: %s\r\nRoom: %s\r\nType: %s\r\nIP: %s\r\nMAC: %s\r\nReported power: %s\r\nDisabled: %t\r\n\r\nLast result:\r\n%s\r\n\r\nLast operation:\r\n%s\r\n\r\nPress Ctrl+C to copy this dialog.", t.Name, t.Room, deviceKind(t), t.IP, t.MAC, t.Power, t.Disabled, t.Status, operation)
-	user.NewProc("MessageBoxW").Call(win, uintptr(unsafe.Pointer(w(body))), uintptr(unsafe.Pointer(w("Device details"))), 0x40)
+	body := deviceDetailsBody(selectedTV, operation, syncResult)
+	title := "Application details"
+	if selectedTV != nil {
+		title = "Device details"
+	}
+	user.NewProc("MessageBoxW").Call(win, uintptr(unsafe.Pointer(w(body))), uintptr(unsafe.Pointer(w(title))), 0x40)
+}
+
+func deviceDetailsBody(t *TV, operation, syncResult string) string {
+	body := applicationBuildDetails() + "\r\n\r\n"
+	if t != nil {
+		body += fmt.Sprintf("Device: %s\r\nRoom: %s\r\nType: %s\r\nIP: %s\r\nMAC: %s\r\nReported power: %s\r\nDisabled: %t\r\n\r\nLast result:\r\n%s\r\n\r\n", t.Name, t.Room, deviceKind(*t), t.IP, t.MAC, t.Power, t.Disabled, t.Status)
+	}
+	return body + "Last LAN sync:\r\n" + syncResult + "\r\n\r\nLast operation:\r\n" + operation + "\r\n\r\nPress Ctrl+C to copy this dialog."
 }
